@@ -47,8 +47,11 @@ router.get("/messages/:user", (req, res) => {
   }
 
   const msgs = getMessagesForUser(user);
+  const upd = msgs.map((msg) => {
+    return `message: ${msg.ciphertext}`
+  })
 
-  res.json(msgs);
+  res.json(upd);
 });
 
 export default router;

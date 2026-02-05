@@ -11,7 +11,9 @@ export function encrypt(message: string, shift = 3): string {
         ((char.charCodeAt(0) - 65 + shift) % 26) + 65
       );
     } else {
-      result += char;
+      result += String.fromCharCode(
+        ((char.charCodeAt(0) - 8 + shift) % 26) + 8
+      );;
     }
   }
 
