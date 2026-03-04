@@ -23,7 +23,7 @@ io.on("connection", (socket) => {
 
   socket.on("register", (username: string) => {
     userSockets.set(username, socket.id);
-    console.log(`✅ ${username} registered with socket ${socket.id}`);
+    console.log(`${username} registered with socket ${socket.id}`);
   });
 
   socket.on("private_message", (data: { from: string, to: string, ciphertext: string }) => {
@@ -50,5 +50,5 @@ io.on("connection", (socket) => {
 
 const PORT = 3000;
 httpServer.listen(PORT, () => {
-  console.log(`🚀 Server & WebSockets running on port ${PORT}`);
+  console.log(`Server & WebSockets running on port ${PORT}`);
 });
