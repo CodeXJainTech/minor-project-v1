@@ -15,11 +15,11 @@ const io = new Server(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] } // Allow React to connect
 });
 
-// The Phonebook: Maps username -> socket.id
+// Maps username -> socket.id
 const userSockets = new Map<string, string>();
 
 io.on("connection", (socket) => {
-  console.log(`⚡ New WebSocket connection: ${socket.id}`);
+  console.log(`New WebSocket connection: ${socket.id}`);
 
   socket.on("register", (username: string) => {
     userSockets.set(username, socket.id);
@@ -41,7 +41,7 @@ io.on("connection", (socket) => {
     for (const [username, id] of userSockets.entries()) {
       if (id === socket.id) {
         userSockets.delete(username);
-        console.log(`❌ ${username} disconnected.`);
+        console.log(`${username} disconnected.`);
         break;
       }
     }

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import LoginForm from './components/LoginForm';
 import { socket } from './services/socket';
-import { encrypt, decrypt } from './crypto/caesar';
+// import { encryptCae, decryptCae } from './crypto/caesar';
+import { encryptAes, decryptAes } from './crypto/aes_js';
 
 interface MessagePayload {
   from: string;
@@ -49,7 +50,7 @@ export default function App() {
       return;
     }
     // THE E2EE MAGIC HAPPENS HERE
-    const encryptedText = encrypt(input);
+    const encryptedText = encryptAes(input);
     const payload: MessagePayload = {
       from: user,
       to: target,
@@ -74,7 +75,7 @@ export default function App() {
       <div className="flex-1 bg-gray-900 border border-green-800 p-4 mb-4 overflow-y-auto">
         {messages.map((msg, i) => {
           // DECRYPT FOR DISPLAY
-          const decryptedText = decrypt(msg.ciphertext);
+          const decryptedText = decryptAes(msg.ciphertext);
           const isMe = msg.from === user;
           return (
             <div
