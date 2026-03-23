@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../lib/arrays.h"
+#include "arrays.h"
 
 /*
     REFERENCE TABLES
