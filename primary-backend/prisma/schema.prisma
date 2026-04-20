@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id              String   @id @default(uuid())
+  username        String   @unique
+  
+  // ZERO-KNOWLEDGE PROOF FIELDS (No passwords!)
+  srpSalt         String   
+  srpVerifier     String   
+
+  // Cryptographic Identity
+  identityKeyPub  String?  // The user's public key
+  
+  // Friend System Relations
+  sentRequests     FriendRequest[] @relation("SentRequests")
+  receivedRequests FriendRequest[] @relation("ReceivedRequests")
+  
+  createdAt       DateTime @default(now())
+}
+
+model FriendRequest {
+  id          String   @id @default(uuid())
+  
+  senderId    String
+  sender      User     @relation("SentRequests", fields: [senderId], references: [id])
+  
+  receiverId  String
+  receiver    User     @relation("ReceivedRequests", fields: [receiverId], references: [id])
+  
+  status      String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  
+  createdAt   DateTime @default(now())
+
+  @@unique([senderId, receiverId]) // Prevent spamming requests
+}
