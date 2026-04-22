@@ -1,4 +1,4 @@
-// @ts-ignore - Ignores the lack of TypeScript definitions for the auto-generated Emscripten file
+//@ts-ignore
 import createAes from '../../public/aes_engine.js';
 
 let wasmModule: any = null;

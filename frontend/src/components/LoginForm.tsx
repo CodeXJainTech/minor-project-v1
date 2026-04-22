@@ -1,44 +1,71 @@
-import { useState} from "react";
+import { useState } from 'react';
 
-interface Props {
-  onLogin: (username: string, password: string) => Promise<void>;
+interface LoginFormProps {
+  onLogin: (username: string, password: string, isRegistering: boolean) => void;
 }
 
-export default function LoginForm({ onLogin }: Props) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+export default function LoginForm({ onLogin }: LoginFormProps) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
 
-  const handleSubmit: React.SubmitEventHandler<HTMLFormElement> = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (username && password) onLogin(username, password);
+    if (!username.trim() || !password.trim()) return;
+    
+    onLogin(username, password, isRegistering);
   };
 
   return (
-    <div className="flex items-center justify-center h-screen bg-gray-950">
-      <form
-        onSubmit={handleSubmit}
-        className="p-8 border border-green-500 bg-gray-900 shadow-[0_0_15px_rgba(0,255,0,0.2)] rounded"
-      >
-        <h2 className="text-2xl mb-6 text-center text-green-400 font-bold tracking-widest font-mono">
-          CYBER_CHAT
-        </h2>
-        <input
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="Username"
-          className="w-full mb-4 p-2 bg-black border border-green-800 text-green-400 focus:outline-none focus:border-green-400"
-        />
-        <input
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          type="password"
-          placeholder="Password"
-          className="w-full mb-6 p-2 bg-black border border-green-800 text-green-400 focus:outline-none focus:border-green-400"
-        />
-        <button className="w-full p-2 bg-green-900 hover:bg-green-700 text-black font-bold uppercase transition-colors">
-          Initialize Connection
-        </button>
-      </form>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+        <div className="bg-indigo-600 px-8 py-10 text-center text-white">
+          <h1 className="text-3xl font-bold mb-2">Project Cipher</h1>
+          <p className="text-indigo-200 text-sm">Zero-Knowledge Authentication</p>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
+              placeholder="Enter your alias"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
+              placeholder="Enter your secure password"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-all flex justify-center items-center gap-2"
+          >
+            {isRegistering ? "Generate Proofs & Register" : "Secure Login"}
+          </button>
+        </form>
+
+        <div className="px-8 pb-8 text-center">
+          <button
+            onClick={() => setIsRegistering(!isRegistering)}
+            className="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+          >
+            {isRegistering ? "Already have an identity? Login." : "New here? Establish identity."}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
