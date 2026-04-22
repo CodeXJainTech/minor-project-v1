@@ -9,35 +9,67 @@ datasource db {
 }
 
 model User {
-  id              String   @id @default(uuid())
-  username        String   @unique
+  id             String   @id @default(uuid())
+  username       String   @unique
   
   // ZERO-KNOWLEDGE PROOF FIELDS (No passwords!)
-  srpSalt         String   
-  srpVerifier     String   
+  srpSalt        String   
+  srpVerifier    String   
 
   // Cryptographic Identity
-  identityKeyPub  String?  // The user's public key
+  identityKeyPub String?  // The user's public key
   
-  // Friend System Relations
+  // Friend System Relations (Linked via username for easy API lookups)
   sentRequests     FriendRequest[] @relation("SentRequests")
   receivedRequests FriendRequest[] @relation("ReceivedRequests")
+
+  // Block System Relations
+  blockedByMe      BlockedUser[] @relation("BlockedByMe")
+  blockedMe        BlockedUser[] @relation("BlockedMe")
   
-  createdAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
 }
 
 model FriendRequest {
-  id          String   @id @default(uuid())
+  id               String   @id @default(uuid())
   
-  senderId    String
-  sender      User     @relation("SentRequests", fields: [senderId], references: [id])
+  senderUsername   String
+  sender           User     @relation("SentRequests", fields: [senderUsername], references: [username])
   
-  receiverId  String
-  receiver    User     @relation("ReceivedRequests", fields: [receiverId], references: [id])
+  receiverUsername String
+  receiver         User     @relation("ReceivedRequests", fields: [receiverUsername], references: [username])
   
-  status      String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  status           String   @default("pending") // pending, accepted, rejected
   
-  createdAt   DateTime @default(now())
+  createdAt        DateTime @default(now())
 
-  @@unique([senderId, receiverId]) // Prevent spamming requests
+  // Prevent Alice from spamming 100 requests to Bob
+  @@unique([senderUsername, receiverUsername]) 
+}
+
+model BlockedUser {
+  id              String   @id @default(uuid())
+
+  blockerUsername  String
+  blocker         User     @relation("BlockedByMe", fields: [blockerUsername], references: [username])
+
+  blockedUsername  String
+  blocked         User     @relation("BlockedMe", fields: [blockedUsername], references: [username])
+
+  createdAt       DateTime @default(now())
+
+  // Prevent duplicate blocks
+  @@unique([blockerUsername, blockedUsername])
+}
+
+model QueuedMessage {
+  id              String   @id @default(uuid())
+  from            String
+  to              String
+  ciphertext      String
+  encryptedAesKey String
+  createdAt       DateTime @default(now())
+
+  // Create an index on 'to' because we will constantly be looking up messages
+  @@index([to])
 }
