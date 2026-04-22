@@ -1,18 +1,18 @@
-import { useState } from 'react';
+import { useState } from "react";
 
 interface LoginFormProps {
   onLogin: (username: string, password: string, isRegistering: boolean) => void;
 }
 
 export default function LoginForm({ onLogin }: LoginFormProps) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) return;
-    
+
     onLogin(username, password, isRegistering);
   };
 
@@ -21,12 +21,16 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
         <div className="bg-indigo-600 px-8 py-10 text-center text-white">
           <h1 className="text-3xl font-bold mb-2">Project Cipher</h1>
-          <p className="text-indigo-200 text-sm">Zero-Knowledge Authentication</p>
+          <p className="text-indigo-200 text-sm">
+            Zero-Knowledge Authentication
+          </p>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Username
+            </label>
             <input
               type="text"
               value={username}
@@ -38,7 +42,9 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Password
+            </label>
             <input
               type="password"
               value={password}
@@ -62,7 +68,9 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
             onClick={() => setIsRegistering(!isRegistering)}
             className="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
           >
-            {isRegistering ? "Already have an identity? Login." : "New here? Establish identity."}
+            {isRegistering
+              ? "Already have an identity? Login."
+              : "New here? Establish identity."}
           </button>
         </div>
       </div>
