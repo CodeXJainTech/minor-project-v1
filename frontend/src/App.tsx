@@ -6,10 +6,12 @@ import { useAuth } from "./hooks/useAuth";
 import { useSocial } from "./hooks/useSocial";
 import { useChat } from "./hooks/useChat";
 import { useSocketListeners } from "./hooks/useSocketListeners";
+import { useRatchet } from "./hooks/useRatchet";
 import { Toaster } from "react-hot-toast";
 
 export default function App() {
-  const { user, myPrivateKey, handleLogin } = useAuth();
+  const { user, myPrivateKey, handleLogin, isLoading } = useAuth();
+  const { getOrCreateSessionKey } = useRatchet(user, myPrivateKey);
 
   const {
     activeChat,
@@ -21,7 +23,8 @@ export default function App() {
     messages,
     sendMessage,
     sendImage,
-  } = useChat(user);
+    isSending,
+  } = useChat(user, myPrivateKey, getOrCreateSessionKey);
 
   const {
     pendingRequests,
@@ -52,9 +55,10 @@ export default function App() {
     setPendingRequests,
     setSentRequests,
     setFriendsList,
+    getOrCreateSessionKey,
   });
 
-  if (!user) return <LoginForm onLogin={handleLogin} />;
+  if (!user) return <LoginForm onLogin={handleLogin} isLoading={isLoading} />;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center py-8 font-sans">
@@ -89,6 +93,7 @@ export default function App() {
           onSendMessage={sendMessage}
           onSendImage={sendImage}
           setPreviewImage={setPreviewImage}
+          isSending={isSending}
         />
       </div>
       <ImagePreview

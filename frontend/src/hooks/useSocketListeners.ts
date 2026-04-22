@@ -1,9 +1,9 @@
 import React, { useEffect } from "react";
 import { socket } from "../services/socket";
-import { decryptWithPrivateKey } from "../crypto/rsa";
 import { decryptAES } from "../crypto/aes_wasm";
 import { db } from "../services/db";
 import toast from "react-hot-toast";
+import { ratchetKey } from "../crypto/ratchet";
 
 interface SocketListenersProps {
   user: string;
@@ -13,6 +13,7 @@ interface SocketListenersProps {
   setPendingRequests: React.Dispatch<React.SetStateAction<string[]>>;
   setSentRequests: React.Dispatch<React.SetStateAction<string[]>>;
   setFriendsList: React.Dispatch<React.SetStateAction<string[]>>;
+  getOrCreateSessionKey: (target: string) => Promise<string>;
 }
 
 export function useSocketListeners({
@@ -23,11 +24,13 @@ export function useSocketListeners({
   setPendingRequests,
   setSentRequests,
   setFriendsList,
+  getOrCreateSessionKey,
 }: SocketListenersProps) {
   useEffect(() => {
     if (!user) return;
 
     socket.on("receive_friend_request", (senderUsername: string) => {
+      toast.success(`New friend request from ${senderUsername}!`);
       setPendingRequests((prev) =>
         prev.includes(senderUsername) ? prev : [...prev, senderUsername],
       );
@@ -56,16 +59,23 @@ export function useSocketListeners({
     socket.on("receive_message", async (payload: any) => {
       try {
         if (!myPrivateKey) return;
-        const decryptedAesKey = await decryptWithPrivateKey(
-          myPrivateKey,
-          payload.encryptedAesKey,
-        );
+
+        // 1. Get current key
+        const currentAesKey = await getOrCreateSessionKey(payload.from);
+
         let actualCiphertext = payload.ciphertext;
         if (payload.type === "image") {
           const res = await fetch(payload.ciphertext);
           actualCiphertext = await res.text();
         }
-        const plaintext = await decryptAES(actualCiphertext, decryptedAesKey);
+
+        // 2. Decrypt the message
+        const plaintext = await decryptAES(actualCiphertext, currentAesKey);
+
+        // 3. THE RATCHET: Move the lock forward
+        const nextKey = await ratchetKey(currentAesKey);
+        localStorage.setItem(`session_${user}_${payload.from}`, nextKey);
+
         await db.messages.add({
           from: payload.from,
           to: user,
@@ -75,7 +85,10 @@ export function useSocketListeners({
           timestamp: Date.now(),
         });
       } catch (error) {
-        console.error("Decrypt failed:", error);
+        console.error(
+          "Failed to decrypt incoming message (Ratchet sync?):",
+          error,
+        );
       }
     });
 
@@ -94,5 +107,6 @@ export function useSocketListeners({
     setPendingRequests,
     setSentRequests,
     setFriendsList,
+    getOrCreateSessionKey,
   ]);
 }

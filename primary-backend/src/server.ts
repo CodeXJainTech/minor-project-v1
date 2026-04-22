@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { createServer } from "http";
@@ -6,19 +7,29 @@ import api from "./api.js";
 import { prisma } from "./db.js";
 import path from "path";
 import { fileURLToPath } from "url";
+import helmet from "helmet";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
+const ALLOWED_ORIGINS = [`${process.env.FRONTEND_URL}`];
 const app = express();
-app.use(cors());
+app.use(helmet());
+app.use(
+  cors({
+    origin: ALLOWED_ORIGINS,
+    methods: ["GET", "POST"],
+  }),
+);
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 app.use("/api", api);
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
+  cors: {
+    origin: ALLOWED_ORIGINS,
+    methods: ["GET", "POST"],
+  },
 });
 
 // Track online users: Map<Username, SocketID>
@@ -124,7 +135,6 @@ io.on("connection", (socket) => {
   socket.on("send_friend_request", (data) => {
     const { sender, receiver } = data;
     const targetSocketId = onlineUsers.get(receiver);
-
     if (targetSocketId) {
       io.to(targetSocketId).emit("receive_friend_request", sender);
     }
@@ -161,6 +171,23 @@ io.on("connection", (socket) => {
   });
 });
 
-httpServer.listen(3000, () =>
-  console.log("Secure Blind Router running on port 3000"),
-);
+async function startServer() {
+  try {
+    console.log("[DB] Verifying Prisma connection...");
+    await prisma.$connect();
+    const userCount = await prisma.user.count();
+    console.log(
+      `[DB] Database connected successfully. Current users: ${userCount}`,
+    );
+
+    const PORT = process.env.PORT || 3000;
+    httpServer.listen(PORT, () =>
+      console.log(`Secure Blind Router running on port ${PORT}`),
+    );
+  } catch (error) {
+    console.error("[DB] CRITICAL: Failed to connect to database!", error);
+    process.exit(1);
+  }
+}
+
+startServer();

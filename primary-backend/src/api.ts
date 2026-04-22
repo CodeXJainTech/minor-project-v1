@@ -33,7 +33,7 @@ router.post("/upload", upload.single("encryptedFile"), (req, res) => {
     return res.status(400).json({ error: "No file uploaded." });
   }
 
-  const fileUrl = `http://localhost:3000/uploads/${req.file.filename}`;
+  const fileUrl = `${process.env.API_URL}/uploads/${req.file.filename}`;
   res.status(200).json({ url: fileUrl });
 });
 
@@ -183,7 +183,7 @@ router.get("/users/search", async (req, res) => {
 
     res.status(200).json(users);
   } catch (err) {
-    console.error("[DB] Search error:", err);
+    console.error("[API] Search error:", err);
     res.status(500).json({ error: "Database error during search." });
   }
 });
@@ -281,7 +281,7 @@ router.get("/request/pending/:username", async (req, res) => {
       .status(200)
       .json({ requests: pending.map((req) => req.senderUsername) });
   } catch (err) {
-    console.error(err);
+    console.error("[API] Get pending requests error:", err);
     res.status(500).json({ error: "Database error." });
   }
 });
@@ -301,8 +301,13 @@ router.get("/request/sent/:username", async (req, res) => {
 
     res.status(200).json({ requests: sent.map((r) => r.receiverUsername) });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Database error." });
+    console.error("[API] Get sent requests error:", err);
+    res
+      .status(500)
+      .json({
+        error: "Database error.",
+        details: err instanceof Error ? err.message : String(err),
+      });
   }
 });
 
@@ -439,7 +444,13 @@ router.get("/friends/:username", async (req, res) => {
 
     res.status(200).json({ friends: friendNames });
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch friends." });
+    console.error("[API] Get friends error:", err);
+    res
+      .status(500)
+      .json({
+        error: "Failed to fetch friends.",
+        details: err instanceof Error ? err.message : String(err),
+      });
   }
 });
 
@@ -512,8 +523,13 @@ router.get("/blocked/:username", async (req, res) => {
 
     res.status(200).json({ blocked: blocked.map((b) => b.blockedUsername) });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Database error." });
+    console.error("[API] Get blocked users error:", err);
+    res
+      .status(500)
+      .json({
+        error: "Database error.",
+        details: err instanceof Error ? err.message : String(err),
+      });
   }
 });
 

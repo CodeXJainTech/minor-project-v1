@@ -67,7 +67,7 @@ model QueuedMessage {
   from            String
   to              String
   ciphertext      String
-  encryptedAesKey String
+  encryptedAesKey String?
   createdAt       DateTime @default(now())
 
   // Create an index on 'to' because we will constantly be looking up messages

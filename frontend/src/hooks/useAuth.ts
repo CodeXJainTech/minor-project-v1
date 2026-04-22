@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { socket } from "../services/socket";
-import { generateRSAKeyPair, exportPublicKey } from "../crypto/rsa";
+import { generateECCKeyPair, exportECCPublicKey } from "../crypto/ecc";
 import srp from "secure-remote-password/client";
 import toast from "react-hot-toast";
 
 export function useAuth() {
   const [user, setUser] = useState(localStorage.getItem("currentUser") || "");
   const [myPrivateKey, setMyPrivateKey] = useState<CryptoKey | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const loadKey = async () => {
@@ -21,9 +22,9 @@ export function useAuth() {
             const loadedKey = await window.crypto.subtle.importKey(
               "pkcs8",
               binaryDer.buffer,
-              { name: "RSA-OAEP", hash: "SHA-256" },
+              { name: "ECDH", namedCurve: "P-256" },
               true,
-              ["decrypt"],
+              ["deriveKey", "deriveBits"],
             );
             setMyPrivateKey(loadedKey);
           } catch (err) {
@@ -40,25 +41,30 @@ export function useAuth() {
     password: string,
     isRegistering: boolean,
   ) => {
+    setIsLoading(true);
     try {
       if (isRegistering) {
         const salt = srp.generateSalt();
         const privateKey = srp.derivePrivateKey(salt, username, password);
         const verifier = srp.deriveVerifier(privateKey);
 
-        const keys = await generateRSAKeyPair();
-        const base64PublicKey = await exportPublicKey(keys.publicKey);
+        console.log("[2] Generating ECC P-256 Key Pair...");
+        const keys = await generateECCKeyPair();
+        const base64PublicKey = await exportECCPublicKey(keys.publicKey);
 
-        const res = await fetch("http://localhost:3000/api/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username,
-            publicKey: base64PublicKey,
-            srpSalt: salt,
-            srpVerifier: verifier,
-          }),
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/api/register`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              username,
+              publicKey: base64PublicKey,
+              srpSalt: salt,
+              srpVerifier: verifier,
+            }),
+          },
+        );
 
         if (!res.ok) throw new Error("Username taken or database error");
 
@@ -74,7 +80,7 @@ export function useAuth() {
       } else {
         const clientEphemeral = srp.generateEphemeral();
         const challengeRes = await fetch(
-          "http://localhost:3000/api/login/challenge",
+          `${import.meta.env.VITE_API_URL}/api/login/challenge`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -98,7 +104,7 @@ export function useAuth() {
         );
 
         const verifyRes = await fetch(
-          "http://localhost:3000/api/login/verify",
+          `${import.meta.env.VITE_API_URL}/api/login/verify`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -121,13 +127,13 @@ export function useAuth() {
           const loadedKey = await window.crypto.subtle.importKey(
             "pkcs8",
             binaryDer.buffer,
-            { name: "RSA-OAEP", hash: "SHA-256" },
+            { name: "ECDH", namedCurve: "P-256" },
             true,
-            ["decrypt"],
+            ["deriveKey", "deriveBits"],
           );
           setMyPrivateKey(loadedKey);
         } else {
-          console.warn("RSA Private Key missing from this device.");
+          console.warn("ECC Private Key missing from this device.");
         }
       }
 
@@ -136,20 +142,37 @@ export function useAuth() {
       socket.connect();
     } catch (err: any) {
       toast.error(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    if (user) {
-      socket.connect();
-    }
-  }, [user]);
+    if (!user || !myPrivateKey) return;
 
-  useEffect(() => {
-    if (user && myPrivateKey) {
+    const onConnect = () => {
+      console.log("[Socket] Connected. Registering:", user);
       socket.emit("register_socket", user);
+    };
+
+    if (socket.connected) {
+      onConnect();
     }
+
+    socket.on("connect", onConnect);
+    socket.connect();
+
+    return () => {
+      socket.off("connect", onConnect);
+    };
   }, [user, myPrivateKey]);
 
-  return { user, setUser, myPrivateKey, setMyPrivateKey, handleLogin };
+  return {
+    user,
+    setUser,
+    myPrivateKey,
+    setMyPrivateKey,
+    handleLogin,
+    isLoading,
+  };
 }

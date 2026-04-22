@@ -19,6 +19,7 @@ interface ChatWindowProps {
   onSendMessage: () => void;
   onSendImage: (e: React.ChangeEvent<HTMLInputElement>) => void;
   setPreviewImage: (url: string | null) => void;
+  isSending: boolean;
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -30,9 +31,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   onSendMessage,
   onSendImage,
   setPreviewImage,
+  isSending,
 }) => {
   return (
-    <div className="flex-1 flex flex-col bg-[#FAFAFA]">
+    <div
+      className={`flex-1 flex flex-col bg-[#FAFAFA] ${isSending ? "cursor-wait" : ""}`}
+    >
       {activeChat ? (
         <>
           <div className="h-20 px-6 border-b border-gray-200 bg-white flex items-center justify-between shadow-sm z-0">
@@ -58,7 +62,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                       d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                     ></path>
                   </svg>
-                  AES-256 / RSA-2048 Secured
+                  AES-256 / ECC-P256 Ratchet
                 </p>
               </div>
             </div>
@@ -136,10 +140,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 id="image-upload"
                 className="hidden"
                 onChange={onSendImage}
+                disabled={isSending}
               />
               <label
                 htmlFor="image-upload"
-                className="p-3 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-xl cursor-pointer transition-colors"
+                className={`p-3 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-xl cursor-pointer transition-colors ${isSending ? "opacity-50 cursor-not-allowed" : ""}`}
                 title="Send Encrypted Image"
               >
                 <svg
@@ -158,15 +163,21 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               </label>
 
               <input
-                placeholder={`Secure message to ${activeChat}...`}
+                placeholder={
+                  isSending
+                    ? "Uploading..."
+                    : `Secure message to ${activeChat}...`
+                }
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && onSendMessage()}
-                className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-xl transition-all outline-none text-gray-700 placeholder-gray-400"
+                disabled={isSending}
+                className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-xl transition-all outline-none text-gray-700 placeholder-gray-400 disabled:opacity-50"
               />
               <button
                 onClick={onSendMessage}
-                className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md hover:shadow-lg transition-all"
+                disabled={isSending || !input.trim()}
+                className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg
                   className="w-6 h-6 transform rotate-45 -mt-1 ml-1"

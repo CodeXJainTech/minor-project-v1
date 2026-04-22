@@ -4,26 +4,30 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "tsc -b && node dist/server.js"
+    "dev": "nodemon server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "@types/express": "^5.0.6",
+    "@prisma/client": "6.19",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "helmet": "^8.1.0",
     "multer": "^2.1.1",
     "secure-remote-password": "^0.3.1",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
-    "@prisma/client": "6.19",
+    "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
     "@types/node": "^25.6.0",
+    "nodemon": "^3.1.9",
     "prisma": "6.19"
   }
 }
