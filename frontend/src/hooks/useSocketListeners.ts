@@ -65,8 +65,21 @@ export function useSocketListeners({
 
         let actualCiphertext = payload.ciphertext;
         if (payload.type === "image") {
-          const res = await fetch(payload.ciphertext);
-          actualCiphertext = await res.text();
+          try {
+            const res = await fetch(payload.ciphertext);
+            if (!res.ok) {
+              throw new Error(`Failed to fetch image: ${res.status} ${res.statusText} at ${payload.ciphertext}`);
+            }
+            actualCiphertext = await res.text();
+            
+            // Basic validation: ciphertext should be base64
+            if (!actualCiphertext || actualCiphertext.length < 10) {
+               throw new Error("Fetched image ciphertext is too short or empty.");
+            }
+          } catch (fetchError) {
+            console.error("Image fetch error:", fetchError);
+            throw fetchError; // Re-throw to be caught by the outer catch
+          }
         }
 
         // 2. Decrypt the message

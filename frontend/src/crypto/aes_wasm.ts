@@ -40,7 +40,7 @@ export async function encryptAES(
   );
 
   const outLen = Module.HEAP32[outLenPtr >> 2];
-  const encryptedBytes = new Uint8Array(Module.HEAPU8.buffer, outPtr, outLen);
+  let encryptedBytes = new Uint8Array(Module.HEAPU8.buffer, outPtr, outLen);
 
   // Convert to Base64 for safe transport (avoiding spread operator for large files)
   let binary = "";
@@ -52,6 +52,9 @@ export async function encryptAES(
     );
   }
   const base64Ciphertext = btoa(binary);
+  
+  // Explicitly trigger garbage collection if possible, or at least nullify large objects
+  (encryptedBytes as any) = null;
 
   // Cleanup memory
   Module._free(textData.ptr);
@@ -71,7 +74,15 @@ export async function decryptAES(
   const Module = await getWasmModule();
 
   // Convert Base64 back to bytes
-  const binaryStr = atob(base64Ciphertext);
+  const trimmed = base64Ciphertext.trim();
+  let binaryStr;
+  try {
+    binaryStr = atob(trimmed);
+  } catch (e) {
+    console.error("Base64 decode failed for string:", trimmed.substring(0, 50) + "...");
+    throw e;
+  }
+  
   const cipherBytes = new Uint8Array(binaryStr.length);
   for (let i = 0; i < binaryStr.length; i++)
     cipherBytes[i] = binaryStr.charCodeAt(i);
@@ -80,6 +91,10 @@ export async function decryptAES(
   const keyData = writeStringToMemory(Module, decryptedAesKey);
   const ivData = writeStringToMemory(Module, IV);
   const outLenPtr = Module._malloc(4);
+
+  if (!cipherData.ptr || !keyData.ptr || !ivData.ptr || !outLenPtr) {
+    throw new Error("WASM Memory allocation failed");
+  }
 
   const outPtr = Module._decrypt_wrapper(
     cipherData.ptr,
@@ -90,7 +105,27 @@ export async function decryptAES(
     outLenPtr,
   );
 
+  if (!outPtr) {
+    // Cleanup before throwing
+    Module._free(cipherData.ptr);
+    Module._free(keyData.ptr);
+    Module._free(ivData.ptr);
+    Module._free(outLenPtr);
+    throw new Error("Decryption failed in WASM engine (check keys/ratchet)");
+  }
+
   const outLen = Module.HEAP32[outLenPtr >> 2];
+  
+  // Safety check for outLen to prevent memory access out of bounds
+  if (outLen < 0 || outLen > Module.HEAPU8.length) {
+    Module._free(cipherData.ptr);
+    Module._free(keyData.ptr);
+    Module._free(ivData.ptr);
+    Module._free(outLenPtr);
+    Module._free_buffer(outPtr);
+    throw new Error(`Invalid decryption output length: ${outLen}`);
+  }
+
   const decryptedBytes = new Uint8Array(Module.HEAPU8.buffer, outPtr, outLen);
 
   // Decode back to string
