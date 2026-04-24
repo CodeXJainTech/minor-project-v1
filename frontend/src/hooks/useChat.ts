@@ -5,6 +5,7 @@ import { db } from "../services/db";
 import { useLiveQuery } from "dexie-react-hooks";
 import toast from "react-hot-toast";
 import { ratchetKey } from "../crypto/ratchet";
+import CryptoJS from "crypto-js";
 
 export function useChat(
   user: string,
@@ -31,16 +32,20 @@ export function useChat(
       // 2. Encrypt the text using the WASM engine
       const ciphertext = await encryptAES(plaintext, currentAesKey);
 
-      // 3. THE RATCHET: Hash the key immediately and save it for the NEXT message!
+      // 3. Compute HMAC for Integrity (Encrypt-then-MAC)
+      const hmac = CryptoJS.HmacSHA256(ciphertext, currentAesKey).toString();
+
+      // 4. THE RATCHET: Hash the key immediately and save it for the NEXT message!
       const nextKey = await ratchetKey(currentAesKey);
       localStorage.setItem(`session_${user}_${targetUser}`, nextKey);
 
-      // 4. Send over socket (Notice we DO NOT send an encryptedAesKey anymore!)
+      // 5. Send over socket
       const payload = {
         to: targetUser,
         from: user,
         ciphertext: ciphertext,
         type: "text",
+        hmac: hmac,
       };
 
       socket.emit("private_message", payload);
@@ -66,20 +71,55 @@ export function useChat(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file || !activeChat || !myPrivateKey || isSending) return;
-      const MAX_FILE_SIZE = 1 * 1024 * 1024;
+      const MAX_FILE_SIZE = 10 * 1024 * 1024;
       if (file.size > MAX_FILE_SIZE) {
-        toast.error("Image is too large!");
+        toast.error("Image is too large (max 10MB)!");
         e.target.value = "";
         return;
       }
       const targetUser = activeChat;
-      const reader = new FileReader();
       setIsSending(true);
-      reader.onload = async (event) => {
+
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.src = objectUrl;
+
+      img.onload = async () => {
+        URL.revokeObjectURL(objectUrl);
         try {
-          const base64Image = event.target?.result as string;
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+
+          // Scale down if image is too large (max 1200x1200px)
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round((height * MAX_WIDTH) / width);
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width = Math.round((width * MAX_HEIGHT) / height);
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          // Optimize image quality before encryption
+          const optimizedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+
           const currentAesKey = await getOrCreateSessionKey(targetUser);
-          const ciphertext = await encryptAES(base64Image, currentAesKey);
+          const ciphertext = await encryptAES(optimizedBase64, currentAesKey);
+
+          // Compute HMAC over the actual image ciphertext before upload
+          const hmac = CryptoJS.HmacSHA256(ciphertext, currentAesKey).toString();
 
           // Ratchet after image too
           const nextKey = await ratchetKey(currentAesKey);
@@ -100,14 +140,15 @@ export function useChat(
           const payload = {
             to: targetUser,
             from: user,
-            ciphertext: url,
+            ciphertext: url, // url to fetch the ciphertext
             type: "image",
+            hmac: hmac,
           };
           socket.emit("private_message", payload);
           await db.messages.add({
             from: user,
             to: targetUser,
-            decryptedText: base64Image,
+            decryptedText: optimizedBase64,
             ciphertext,
             type: "image",
             timestamp: Date.now(),
@@ -117,9 +158,16 @@ export function useChat(
           toast.error("Failed to send image.");
         } finally {
           setIsSending(false);
+          e.target.value = "";
         }
       };
-      reader.readAsDataURL(file);
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        toast.error("Invalid image file.");
+        setIsSending(false);
+        e.target.value = "";
+      };
     },
     [activeChat, myPrivateKey, isSending, user, getOrCreateSessionKey],
   );

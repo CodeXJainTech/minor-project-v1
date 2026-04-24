@@ -1,5 +1,23 @@
 @import "tailwindcss";
 
 body {
-  @apply bg-gray-950 text-green-400 font-mono; /* The Hacker Vibe */
+  @apply bg-slate-950 text-slate-200 font-sans antialiased selection:bg-indigo-500/30;
+}
+
+/* Custom Scrollbar for Dark Theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-700/50 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-600;
 }

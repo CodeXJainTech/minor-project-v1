@@ -19,19 +19,19 @@ export default function LoginForm({ onLogin, isLoading }: LoginFormProps) {
 
   return (
     <div
-      className={`min-h-screen bg-gray-50 flex items-center justify-center p-4 ${isLoading ? "cursor-wait" : ""}`}
+      className={`min-h-screen bg-slate-950 flex items-center justify-center p-4 ${isLoading ? "cursor-wait" : ""}`}
     >
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-        <div className="bg-indigo-600 px-8 py-10 text-center text-white">
-          <h1 className="text-3xl font-bold mb-2">Project Cipher</h1>
-          <p className="text-indigo-200 text-sm">
+      <div className="max-w-md w-full bg-slate-900/80 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden border border-slate-800">
+        <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 px-8 py-10 text-center text-white">
+          <h1 className="text-3xl font-extrabold tracking-tight mb-2">Project Cipher</h1>
+          <p className="text-indigo-200 text-sm font-medium">
             Zero-Knowledge Authentication
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Username
             </label>
             <input
@@ -39,14 +39,14 @@ export default function LoginForm({ onLogin, isLoading }: LoginFormProps) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={isLoading}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none disabled:opacity-50"
+              className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 text-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none disabled:opacity-50 placeholder-slate-500"
               placeholder="Enter your alias"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Password
             </label>
             <input
@@ -54,7 +54,7 @@ export default function LoginForm({ onLogin, isLoading }: LoginFormProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={isLoading}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none disabled:opacity-50"
+              className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 text-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none disabled:opacity-50 placeholder-slate-500"
               placeholder="Enter your secure password"
               required
             />
@@ -63,7 +63,7 @@ export default function LoginForm({ onLogin, isLoading }: LoginFormProps) {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-all flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <>
@@ -101,7 +101,7 @@ export default function LoginForm({ onLogin, isLoading }: LoginFormProps) {
           <button
             onClick={() => setIsRegistering(!isRegistering)}
             disabled={isLoading}
-            className="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors disabled:opacity-50"
+            className="text-sm text-indigo-400 hover:text-indigo-300 font-medium transition-colors disabled:opacity-50"
           >
             {isRegistering
               ? "Already have an identity? Login."

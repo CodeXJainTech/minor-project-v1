@@ -4,6 +4,7 @@ import { decryptAES } from "../crypto/aes_wasm";
 import { db } from "../services/db";
 import toast from "react-hot-toast";
 import { ratchetKey } from "../crypto/ratchet";
+import CryptoJS from "crypto-js";
 
 interface SocketListenersProps {
   user: string;
@@ -80,6 +81,17 @@ export function useSocketListeners({
             console.error("Image fetch error:", fetchError);
             throw fetchError; // Re-throw to be caught by the outer catch
           }
+        }
+
+        // Verify HMAC for Integrity
+        if (payload.hmac) {
+          const expectedHmac = CryptoJS.HmacSHA256(actualCiphertext, currentAesKey).toString();
+          if (expectedHmac !== payload.hmac) {
+            toast.error("Integrity Check Failed: Tampered Message Detected!");
+            throw new Error("HMAC verification failed. The ciphertext was altered in transit.");
+          }
+        } else {
+          console.warn("Message received without HMAC, bypassing integrity check (legacy message)");
         }
 
         // 2. Decrypt the message
