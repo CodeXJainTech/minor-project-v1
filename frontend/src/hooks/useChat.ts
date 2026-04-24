@@ -5,7 +5,6 @@ import { db } from "../services/db";
 import { useLiveQuery } from "dexie-react-hooks";
 import toast from "react-hot-toast";
 import { ratchetKey } from "../crypto/ratchet";
-import CryptoJS from "crypto-js";
 
 export function useChat(
   user: string,
@@ -32,20 +31,16 @@ export function useChat(
       // 2. Encrypt the text using the WASM engine
       const ciphertext = await encryptAES(plaintext, currentAesKey);
 
-      // 3. Compute HMAC for Integrity (Encrypt-then-MAC)
-      const hmac = CryptoJS.HmacSHA256(ciphertext, currentAesKey).toString();
-
-      // 4. THE RATCHET: Hash the key immediately and save it for the NEXT message!
+      // 3. THE RATCHET: Hash the key immediately and save it for the NEXT message!
       const nextKey = await ratchetKey(currentAesKey);
       localStorage.setItem(`session_${user}_${targetUser}`, nextKey);
 
-      // 5. Send over socket
+      // 4. Send over socket
       const payload = {
         to: targetUser,
         from: user,
         ciphertext: ciphertext,
         type: "text",
-        hmac: hmac,
       };
 
       socket.emit("private_message", payload);
@@ -60,7 +55,6 @@ export function useChat(
         timestamp: Date.now(),
       });
     } catch (error) {
-      console.error("Encryption failed:", error);
       toast.error("Failed to send message.");
     } finally {
       setIsSending(false);
@@ -118,10 +112,6 @@ export function useChat(
           const currentAesKey = await getOrCreateSessionKey(targetUser);
           const ciphertext = await encryptAES(optimizedBase64, currentAesKey);
 
-          // Compute HMAC over the actual image ciphertext before upload
-          const hmac = CryptoJS.HmacSHA256(ciphertext, currentAesKey).toString();
-
-          // Ratchet after image too
           const nextKey = await ratchetKey(currentAesKey);
           localStorage.setItem(`session_${user}_${targetUser}`, nextKey);
 
@@ -142,7 +132,6 @@ export function useChat(
             from: user,
             ciphertext: url, // url to fetch the ciphertext
             type: "image",
-            hmac: hmac,
           };
           socket.emit("private_message", payload);
           await db.messages.add({
@@ -154,7 +143,6 @@ export function useChat(
             timestamp: Date.now(),
           });
         } catch (err) {
-          console.error("Image failed:", err);
           toast.error("Failed to send image.");
         } finally {
           setIsSending(false);
@@ -172,6 +160,81 @@ export function useChat(
     [activeChat, myPrivateKey, isSending, user, getOrCreateSessionKey],
   );
 
+  const sendAudio = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !activeChat || !myPrivateKey || isSending) return;
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error("Audio is too large (max 10MB)!");
+        e.target.value = "";
+        return;
+      }
+      
+      const targetUser = activeChat;
+      setIsSending(true);
+
+      try {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          try {
+            const base64Audio = reader.result as string;
+            
+            const currentAesKey = await getOrCreateSessionKey(targetUser);
+            const ciphertext = await encryptAES(base64Audio, currentAesKey);
+
+            const nextKey = await ratchetKey(currentAesKey);
+            localStorage.setItem(`session_${user}_${targetUser}`, nextKey);
+
+            const blob = new Blob([ciphertext], { type: "text/plain" });
+            const formData = new FormData();
+            formData.append("encryptedFile", blob);
+            
+            const uploadRes = await fetch(
+              `${import.meta.env.VITE_API_URL}/api/upload`,
+              {
+                method: "POST",
+                body: formData,
+              },
+            );
+            
+            if (!uploadRes.ok) throw new Error("Upload failed.");
+            const { url } = await uploadRes.json();
+            
+            const payload = {
+              to: targetUser,
+              from: user,
+              ciphertext: url,
+              type: "audio",
+            };
+            
+            socket.emit("private_message", payload);
+            await db.messages.add({
+              from: user,
+              to: targetUser,
+              decryptedText: base64Audio,
+              ciphertext,
+              type: "audio",
+              timestamp: Date.now(),
+            });
+          } catch (err) {
+            toast.error("Failed to send audio.");
+          } finally {
+            setIsSending(false);
+            e.target.value = "";
+          }
+        };
+        
+        reader.readAsDataURL(file);
+      } catch (err) {
+        toast.error("Failed to read audio file.");
+        setIsSending(false);
+        e.target.value = "";
+      }
+    },
+    [activeChat, myPrivateKey, isSending, user, getOrCreateSessionKey],
+  );
+
   return {
     activeChat,
     setActiveChat,
@@ -182,6 +245,7 @@ export function useChat(
     messages,
     sendMessage,
     sendImage,
+    sendAudio,
     isSending,
   };
 }

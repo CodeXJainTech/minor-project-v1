@@ -1,6 +1,4 @@
 import { Router } from "express";
-import { authenticate, userExists } from "./users.js";
-import { getMessagesForUser } from "./messages.js";
 import { prisma } from "./db.js";
 import srp from "secure-remote-password/server.js";
 import path from "path";
@@ -122,14 +120,7 @@ router.post("/login/verify", async (req, res) => {
   }
 });
 
-// Get offline messages for a user
-router.get("/messages/:user", (req, res) => {
-  const user = req.params.user;
-  if (!userExists(user)) {
-    return res.status(400).json({ error: "User not found" });
-  }
-  res.json(getMessagesForUser(user));
-});
+// (Offline messages logic removed for zero-footprint architecture)
 
 // Search users (excludes self and blocked users)
 router.get("/users/search", async (req, res) => {
@@ -308,6 +299,26 @@ router.get("/request/sent/:username", async (req, res) => {
         error: "Database error.",
         details: err instanceof Error ? err.message : String(err),
       });
+  }
+});
+
+// Revoke an outgoing friend request
+router.post("/request/revoke", async (req, res) => {
+  const { sender, receiver } = req.body;
+
+  try {
+    await prisma.friendRequest.deleteMany({
+      where: {
+        senderUsername: sender,
+        receiverUsername: receiver,
+        status: "pending",
+      },
+    });
+
+    res.status(200).json({ success: true, message: "Request revoked." });
+  } catch (err) {
+    console.error("[API] Revoke request error:", err);
+    res.status(500).json({ error: "Database error." });
   }
 });
 

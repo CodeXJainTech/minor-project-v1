@@ -1,20 +1,25 @@
 import { useState } from "react";
 
 interface LoginFormProps {
-  onLogin: (username: string, password: string, isRegistering: boolean) => void;
+  onLogin: (username: string, password: string, isRegistering: boolean, vaultFile?: File | null) => void;
   isLoading: boolean;
 }
 
 export default function LoginForm({ onLogin, isLoading }: LoginFormProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [vaultFile, setVaultFile] = useState<File | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim() || isLoading) return;
+    if (!isRegistering && !vaultFile) {
+      alert("Vault file is required for login.");
+      return;
+    }
 
-    onLogin(username, password, isRegistering);
+    onLogin(username, password, isRegistering, vaultFile);
   };
 
   return (
@@ -59,6 +64,22 @@ export default function LoginForm({ onLogin, isLoading }: LoginFormProps) {
               required
             />
           </div>
+
+          {!isRegistering && (
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Identity Vault File
+              </label>
+              <input
+                type="file"
+                accept=".json"
+                onChange={(e) => setVaultFile(e.target.files?.[0] || null)}
+                disabled={isLoading}
+                className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 text-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none disabled:opacity-50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                required
+              />
+            </div>
+          )}
 
           <button
             type="submit"

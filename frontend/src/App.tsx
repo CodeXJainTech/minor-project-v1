@@ -10,7 +10,7 @@ import { useRatchet } from "./hooks/useRatchet";
 import { Toaster } from "react-hot-toast";
 
 export default function App() {
-  const { user, myPrivateKey, handleLogin, isLoading } = useAuth();
+  const { user, myPrivateKey, handleLogin, handleLogout, isLoading } = useAuth();
   const { getOrCreateSessionKey } = useRatchet(user, myPrivateKey);
 
   const {
@@ -23,6 +23,7 @@ export default function App() {
     messages,
     sendMessage,
     sendImage,
+    sendAudio,
     isSending,
   } = useChat(user, myPrivateKey, getOrCreateSessionKey);
 
@@ -45,6 +46,9 @@ export default function App() {
     unblockUser,
     getRelationship,
     searchUsers,
+    onlineUsers,
+    setOnlineUsers,
+    revokeRequest,
   } = useSocial(user, activeChat, setActiveChat);
 
   useSocketListeners({
@@ -56,9 +60,10 @@ export default function App() {
     setSentRequests,
     setFriendsList,
     getOrCreateSessionKey,
+    setOnlineUsers,
   });
 
-  if (!user) return <LoginForm onLogin={handleLogin} isLoading={isLoading} />;
+  if (!user || !myPrivateKey) return <LoginForm onLogin={handleLogin} isLoading={isLoading} />;
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center py-8 font-sans">
@@ -78,11 +83,14 @@ export default function App() {
           onSendRequest={sendRequest}
           onAcceptRequest={acceptRequest}
           onRejectRequest={rejectRequest}
+          onRevokeRequest={revokeRequest}
           onBlockUser={blockUser}
           onUnblockUser={unblockUser}
           showBlockPanel={showBlockPanel}
           setShowBlockPanel={setShowBlockPanel}
           getRelationship={getRelationship}
+          onLogout={handleLogout}
+          onlineUsers={onlineUsers}
         />
         <ChatWindow
           user={user}
@@ -92,8 +100,10 @@ export default function App() {
           setInput={setInput}
           onSendMessage={sendMessage}
           onSendImage={sendImage}
+          onSendAudio={sendAudio}
           setPreviewImage={setPreviewImage}
           isSending={isSending}
+          onlineUsers={onlineUsers}
         />
       </div>
       <ImagePreview

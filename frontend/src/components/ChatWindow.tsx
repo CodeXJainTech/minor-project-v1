@@ -6,7 +6,7 @@ interface SavedMessage {
   to: string;
   ciphertext: string;
   decryptedText: string;
-  type: "text" | "image";
+  type: "text" | "image" | "audio";
   timestamp: number;
 }
 
@@ -18,8 +18,10 @@ interface ChatWindowProps {
   setInput: (val: string) => void;
   onSendMessage: () => void;
   onSendImage: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onSendAudio: (e: React.ChangeEvent<HTMLInputElement>) => void;
   setPreviewImage: (url: string | null) => void;
   isSending: boolean;
+  onlineUsers: string[];
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -30,14 +32,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   setInput,
   onSendMessage,
   onSendImage,
+  onSendAudio,
   setPreviewImage,
   isSending,
+  onlineUsers,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const isTargetOnline = activeChat ? onlineUsers.includes(activeChat) : false;
+  const isInputDisabled = isSending || !isTargetOnline;
 
   return (
     <div
@@ -121,6 +128,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                             className="max-w-full max-h-62.5 rounded-xl object-contain block mx-auto cursor-zoom-in hover:opacity-90 transition-opacity"
                             loading="lazy"
                           />
+                        ) : msg.type === "audio" ? (
+                          <audio controls src={msg.decryptedText} className="max-w-full h-10 outline-none" />
                         ) : (
                           <p className="text-sm px-1 py-1 break-words whitespace-pre-wrap">
                             {msg.decryptedText}
@@ -147,12 +156,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 id="image-upload"
                 className="hidden"
                 onChange={onSendImage}
-                disabled={isSending}
+                disabled={isInputDisabled}
               />
               <label
-                htmlFor="image-upload"
-                className={`p-3 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl cursor-pointer transition-colors border border-slate-700 shadow-sm ${isSending ? "opacity-50 cursor-not-allowed" : ""}`}
-                title="Send Encrypted Image"
+                htmlFor={isInputDisabled ? undefined : "image-upload"}
+                className={`p-3 bg-slate-800 text-slate-400 rounded-xl transition-colors border border-slate-700 shadow-sm ${isInputDisabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-700 cursor-pointer"}`}
+                title={isInputDisabled ? "Target offline or calculating handshake" : "Send Encrypted Image"}
               >
                 <svg
                   className="w-6 h-6"
@@ -170,21 +179,46 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               </label>
 
               <input
+                type="file"
+                accept="audio/*"
+                id="audio-upload"
+                className="hidden"
+                onChange={onSendAudio}
+                disabled={isInputDisabled}
+              />
+              <label
+                htmlFor={isInputDisabled ? undefined : "audio-upload"}
+                className={`p-3 bg-slate-800 text-slate-400 rounded-xl transition-colors border border-slate-700 shadow-sm ${isInputDisabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-700 cursor-pointer"}`}
+                title={isInputDisabled ? "Target offline or calculating handshake" : "Send Encrypted Audio"}
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                </svg>
+              </label>
+
+              <input
                 placeholder={
-                  isSending
-                    ? "Uploading..."
+                  !isTargetOnline
+                    ? "Target is offline. Connection locked."
+                    : isSending
+                    ? "Calculating cryptographic handshake..."
                     : `Secure message to ${activeChat}...`
                 }
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && onSendMessage()}
-                disabled={isSending}
+                onKeyDown={(e) => e.key === "Enter" && !isInputDisabled && onSendMessage()}
+                disabled={isInputDisabled}
                 className="flex-1 px-4 py-3 bg-slate-950 border border-slate-800 focus:bg-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50 rounded-xl transition-all outline-none text-slate-100 placeholder-slate-500 disabled:opacity-50 shadow-inner"
               />
               <button
                 type="button"
                 onClick={(e) => { e.preventDefault(); onSendMessage(); }}
-                disabled={isSending || !input.trim()}
+                disabled={isInputDisabled || !input.trim()}
                 className="p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg

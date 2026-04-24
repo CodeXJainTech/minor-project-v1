@@ -61,15 +61,4 @@ model BlockedUser {
   // Prevent duplicate blocks
   @@unique([blockerUsername, blockedUsername])
 }
-
-model QueuedMessage {
-  id              String   @id @default(uuid())
-  from            String
-  to              String
-  ciphertext      String
-  encryptedAesKey String?
-  createdAt       DateTime @default(now())
-
-  // Create an index on 'to' because we will constantly be looking up messages
-  @@index([to])
-}
+

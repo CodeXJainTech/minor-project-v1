@@ -3,6 +3,7 @@ import { socket } from "../services/socket";
 import { generateECCKeyPair, exportECCPublicKey } from "../crypto/ecc";
 import srp from "secure-remote-password/client";
 import toast from "react-hot-toast";
+import { db } from "../services/db";
 
 export function useAuth() {
   const [user, setUser] = useState(localStorage.getItem("currentUser") || "");
@@ -28,7 +29,7 @@ export function useAuth() {
             );
             setMyPrivateKey(loadedKey);
           } catch (err) {
-            console.error("Failed to load key from storage:", err);
+            toast.error("Failed to load key from storage");
           }
         }
       }
@@ -40,6 +41,7 @@ export function useAuth() {
     username: string,
     password: string,
     isRegistering: boolean,
+    vaultFile?: File | null
   ) => {
     setIsLoading(true);
     try {
@@ -48,7 +50,7 @@ export function useAuth() {
         const privateKey = srp.derivePrivateKey(salt, username, password);
         const verifier = srp.deriveVerifier(privateKey);
 
-        console.log("[2] Generating ECC P-256 Key Pair...");
+
         const keys = await generateECCKeyPair();
         const base64PublicKey = await exportECCPublicKey(keys.publicKey);
 
@@ -76,8 +78,21 @@ export function useAuth() {
         const base64PrivateKey = btoa(
           String.fromCharCode(...new Uint8Array(exportedPrivate)),
         );
-        localStorage.setItem(`privateKey_${username}`, base64PrivateKey);
+        
+        // Vault Birth: Download the private key
+        const vaultData = JSON.stringify({ privateKey: base64PrivateKey, contacts: [] });
+        const blob = new Blob([vaultData], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `cipher_vault_${username}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+
       } else {
+        if (!vaultFile) {
+          throw new Error("Vault file is required for login!");
+        }
         const clientEphemeral = srp.generateEphemeral();
         const challengeRes = await fetch(
           `${import.meta.env.VITE_API_URL}/api/login/challenge`,
@@ -118,22 +133,30 @@ export function useAuth() {
 
         if (!verifyRes.ok) throw new Error("Invalid password!");
 
-        const savedKeyBase64 = localStorage.getItem(`privateKey_${username}`);
-        if (savedKeyBase64) {
-          const binaryDerString = window.atob(savedKeyBase64);
-          const binaryDer = new Uint8Array(binaryDerString.length);
-          for (let i = 0; i < binaryDerString.length; i++)
-            binaryDer[i] = binaryDerString.charCodeAt(i);
-          const loadedKey = await window.crypto.subtle.importKey(
-            "pkcs8",
-            binaryDer.buffer,
-            { name: "ECDH", namedCurve: "P-256" },
-            true,
-            ["deriveKey", "deriveBits"],
-          );
-          setMyPrivateKey(loadedKey);
-        } else {
-          console.warn("ECC Private Key missing from this device.");
+        // Vault Login Checkpoint: Extract Private Key and Contacts
+        const fileContent = await vaultFile.text();
+        const vault = JSON.parse(fileContent);
+
+        if (!vault.privateKey) {
+          throw new Error("Invalid vault file: Missing private key.");
+        }
+
+        const binaryDerString = window.atob(vault.privateKey);
+        const binaryDer = new Uint8Array(binaryDerString.length);
+        for (let i = 0; i < binaryDerString.length; i++)
+          binaryDer[i] = binaryDerString.charCodeAt(i);
+        const loadedKey = await window.crypto.subtle.importKey(
+          "pkcs8",
+          binaryDer.buffer,
+          { name: "ECDH", namedCurve: "P-256" },
+          true,
+          ["deriveKey", "deriveBits"],
+        );
+        setMyPrivateKey(loadedKey);
+
+        if (vault.contacts && Array.isArray(vault.contacts)) {
+          await db.contacts.clear();
+          await db.contacts.bulkAdd(vault.contacts);
         }
       }
 
@@ -151,7 +174,6 @@ export function useAuth() {
     if (!user || !myPrivateKey) return;
 
     const onConnect = () => {
-      console.log("[Socket] Connected. Registering:", user);
       socket.emit("register_socket", user);
     };
 
@@ -167,12 +189,41 @@ export function useAuth() {
     };
   }, [user, myPrivateKey]);
 
+  const handleLogout = async () => {
+    if (!myPrivateKey || !user) return;
+    
+    // 1. Export private key
+    const exportedPrivate = await window.crypto.subtle.exportKey("pkcs8", myPrivateKey);
+    const base64PrivateKey = btoa(String.fromCharCode(...new Uint8Array(exportedPrivate)));
+    
+    // 2. Export contacts
+    const contacts = await db.contacts.toArray();
+    
+    // 3. Create Vault backup
+    const vaultData = JSON.stringify({ privateKey: base64PrivateKey, contacts });
+    const blob = new Blob([vaultData], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cipher_vault_backup_${user}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    // 4. Nuclear wipe
+    await db.delete();
+    localStorage.clear();
+    window.location.reload();
+  };
+
   return {
     user,
     setUser,
     myPrivateKey,
     setMyPrivateKey,
     handleLogin,
+    handleLogout,
     isLoading,
   };
 }

@@ -4,7 +4,6 @@ import { decryptAES } from "../crypto/aes_wasm";
 import { db } from "../services/db";
 import toast from "react-hot-toast";
 import { ratchetKey } from "../crypto/ratchet";
-import CryptoJS from "crypto-js";
 
 interface SocketListenersProps {
   user: string;
@@ -15,6 +14,7 @@ interface SocketListenersProps {
   setSentRequests: React.Dispatch<React.SetStateAction<string[]>>;
   setFriendsList: React.Dispatch<React.SetStateAction<string[]>>;
   getOrCreateSessionKey: (target: string) => Promise<string>;
+  setOnlineUsers: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
 export function useSocketListeners({
@@ -26,9 +26,24 @@ export function useSocketListeners({
   setSentRequests,
   setFriendsList,
   getOrCreateSessionKey,
+  setOnlineUsers,
 }: SocketListenersProps) {
   useEffect(() => {
     if (!user) return;
+
+    socket.on("online_users", (users: string[]) => {
+      setOnlineUsers(users);
+    });
+
+    socket.on("user_connected", (connectedUser: string) => {
+      setOnlineUsers((prev) => 
+        prev.includes(connectedUser) ? prev : [...prev, connectedUser]
+      );
+    });
+
+    socket.on("user_disconnected", (disconnectedUser: string) => {
+      setOnlineUsers((prev) => prev.filter(u => u !== disconnectedUser));
+    });
 
     socket.on("receive_friend_request", (senderUsername: string) => {
       toast.success(`New friend request from ${senderUsername}!`);
@@ -65,34 +80,24 @@ export function useSocketListeners({
         const currentAesKey = await getOrCreateSessionKey(payload.from);
 
         let actualCiphertext = payload.ciphertext;
-        if (payload.type === "image") {
+        if (payload.type === "image" || payload.type === "audio") {
           try {
             const res = await fetch(payload.ciphertext);
             if (!res.ok) {
-              throw new Error(`Failed to fetch image: ${res.status} ${res.statusText} at ${payload.ciphertext}`);
+              throw new Error(`Failed to fetch media: ${res.status} ${res.statusText} at ${payload.ciphertext}`);
             }
             actualCiphertext = await res.text();
             
             // Basic validation: ciphertext should be base64
             if (!actualCiphertext || actualCiphertext.length < 10) {
-               throw new Error("Fetched image ciphertext is too short or empty.");
+               throw new Error("Fetched media ciphertext is too short or empty.");
             }
           } catch (fetchError) {
-            console.error("Image fetch error:", fetchError);
+            toast.error("Failed to fetch media message");
             throw fetchError; // Re-throw to be caught by the outer catch
           }
         }
 
-        // Verify HMAC for Integrity
-        if (payload.hmac) {
-          const expectedHmac = CryptoJS.HmacSHA256(actualCiphertext, currentAesKey).toString();
-          if (expectedHmac !== payload.hmac) {
-            toast.error("Integrity Check Failed: Tampered Message Detected!");
-            throw new Error("HMAC verification failed. The ciphertext was altered in transit.");
-          }
-        } else {
-          console.warn("Message received without HMAC, bypassing integrity check (legacy message)");
-        }
 
         // 2. Decrypt the message
         const plaintext = await decryptAES(actualCiphertext, currentAesKey);
@@ -110,10 +115,7 @@ export function useSocketListeners({
           timestamp: Date.now(),
         });
       } catch (error) {
-        console.error(
-          "Failed to decrypt incoming message (Ratchet sync?):",
-          error,
-        );
+        toast.error("Failed to decrypt incoming message.");
       }
     });
 
@@ -123,6 +125,9 @@ export function useSocketListeners({
       socket.off("request_accepted");
       socket.off("request_rejected");
       socket.off("user_blocked_you");
+      socket.off("online_users");
+      socket.off("user_connected");
+      socket.off("user_disconnected");
     };
   }, [
     user,
