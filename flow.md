@@ -1,63 +1,81 @@
-# Project Cipher: System Flow & Lifecycle
+# 🛡️ Project Krypt: Detailed System Lifecycle
 
-This document provides a detailed technical walkthrough of the application's lifecycle, from user onboarding to secure message exchange and session termination.
-
----
-
-## 1. User Onboarding & Registration
-**Trigger:** User fills out the registration form.
-
-1.  **SRP Setup:** The client generates a random salt and derives a verifier from the password using the Secure Remote Password (SRP) protocol.
-2.  **Permanent Key Generation:** The client generates a permanent **ECC P-256 Key Pair** for long-term identity.
-3.  **Registration Request:** The client sends the `username`, `srpSalt`, `srpVerifier`, and the **Permanent Public Key** to the server.
-4.  **Vault Birth:** Before the browser session continues, the client packages the **Permanent Private Key** into a JSON file and triggers an automatic browser download. 
-    *   **File:** `cipher_vault_[username].json`
-    *   **Zero Footprint:** The private key is NOT stored in `localStorage` or on the server.
+This document provides a technical walkthrough of the **Project Krypt** lifecycle, detailing the cryptographic operations and state transitions that ensure zero-knowledge security and perfect forward secrecy.
 
 ---
 
-## 2. Authentication (The Vault Login Checkpoint)
-**Trigger:** User attempts to log in.
+## 1. User Registration (Identity Genesis)
+**Goal:** Create a globally unique identity without the server ever knowing the password.
 
-1.  **SRP Challenge:** The client performs the standard SRP 3-way handshake with the server to verify the password without ever sending it.
-2.  **Vault Upload:** Upon password verification, the `LoginForm` requires the user to upload their `cipher_vault_[username].json`.
-3.  **Active Memory Extraction:** The `useAuth` hook reads the uploaded file, imports the Private Key into a React state (`myPrivateKey`), and populates the local IndexedDB `contacts` list from the vault metadata.
-4.  **Socket Registration:** Once the key is in memory, the client connects to the WebSocket and emits `register_socket`, broadcasting its "Online" status to friends.
+1.  **SRP Setup**: Client generates a random 32-byte salt and computes a `verifier` using the **SRP-6a** protocol.
+2.  **Identity Keypair**: Client generates a permanent **ECC P-256** KeyPair. The public key is the user's "Identity Certificate."
+3.  **Submission**: Client sends `username`, `salt`, `verifier`, and `publicKey` to the server.
+4.  **Vault Export**: The Private Key is exported as a `.vault` file.
+    *   **Security Principle**: The server never sees the Private Key. It is the user's responsibility to guard this file.
 
----
+## 2. Authentication & Session Restoration
+**Goal:** Prove identity to the server and restore the local cryptographic environment.
 
-## 3. The Cryptographic Handshake (ECDHE)
-**Trigger:** User opens a chat with a friend for the first time in the current session.
+### A. Full Login (New Device/Fresh Tab)
+1.  **SRP Handshake**:
+    *   Client requests a challenge. Server sends `salt` and `B` (server ephemeral).
+    *   Client solves the mathematical challenge using the password and sends `A` (client ephemeral) + `M1` (proof).
+    *   Server validates `M1`. If successful, the user is authenticated.
+2.  **Identity Restoration**:
+    *   The user must upload their `.vault` file.
+    *   The **Private Key** is imported into RAM (never saved to `localStorage` in plaintext).
+3.  **Session Caching**: The password is saved to **`sessionStorage`** (volatile tab memory). The private key is encrypted with the password and saved to a **Secure Cache** in `localStorage`.
 
-1.  **Public Key Fetch:** The `useRatchet` hook requests the target user's **Permanent Public Key** from the server.
-2.  **TOFU (Trust on First Use) Firewall:**
-    *   If the key is new, it is saved to the local IndexedDB `contacts` table.
-    *   If the key has changed since the last interaction, the system throws a **Critical Security Alert** and blocks the connection.
-3.  **Ephemeral Key Generation:** The client generates a brand new, temporary ECC Key Pair for the session.
-4.  **Shared Secret Derivation:** The client performs an ECDH exchange using its **Permanent Private Key** and the target's **Permanent Public Key** to derive the **Root AES-256-GCM Key**.
-5.  **Ratchet Initialization:** This key is saved to `localStorage` under `session_[me]_[target]`, initializing the one-way hash ratchet chain.
+### B. Auto-Restoration (Page Refresh)
+1.  **Trigger**: User refreshes the tab.
+2.  **Process**:
+    *   The app detects the `sessionPassword` in `sessionStorage`.
+    *   It fetches the encrypted Private Key from the `localStorage` cache.
+    *   The key is decrypted in RAM using the session password.
+    *   **Result**: Seamless UX without re-uploading the vault file.
 
----
+## 3. The Social Handshake (Establishment of Trust)
+**Goal:** Establish an E2EE channel between Alice and Bob.
 
-## 4. Secure Message Exchange
-**Trigger:** User sends a message (Text, Image, or Audio).
+1.  **Friend Request**: Alice sends a request to Bob via the server.
+2.  **Acceptance**: Bob accepts. The server creates a bidirectional "Friend" relationship.
+3.  **Revocation**: If Alice cancels a pending request, a **Socket Event** (`request_revoked`) is emitted to Bob, immediately clearing the UI and updating the database.
 
-1.  **Encryption:** The `useChat` hook retrieves the current AES key, encrypts the payload via the **WebAssembly AES-GCM engine**, and generates the ciphertext.
-2.  **The Ratchet:** After encryption, the key is immediately hashed using SHA-256 to create the **Next Key**. The previous key is overwritten in `localStorage` to provide **Forward Secrecy**.
-3.  **Transmission:** 
-    *   **Text:** Sent directly via WebSocket.
-    *   **Media:** The encrypted blob is uploaded to `/api/upload` (5-minute self-destructing folder). The resulting short URL is sent via WebSocket.
-4.  **Strict Routing:** The server checks if the target is online.
-    *   **Online:** Forwarded immediately.
-    *   **Offline:** Payload is instantly dropped (Zero Footprint).
+## 4. Message Exchange (The Handshake & Ratchet)
+**Goal:** Transmit data with Perfect Forward Secrecy and Identity Authentication.
 
----
+1.  **Authenticated Ephemeral Handshake**:
+    *   Alice requests Bob's Public Identity Key from the server.
+    *   **Initiator**: Alice generates a fresh **Ephemeral ECC KeyPair**.
+    *   **Signature**: She computes a `signature` by hashing the Ephemeral Public Key using a secret derived from the static identity keys (`Alice_Private * Bob_Public`).
+    *   **Root Key**: Alice derives the **Root AES Key** from `(Alice_Ephemeral_Private * Bob_Static_Public)`.
+    *   **Transmission**: Alice sends the message payload along with her `ephemeralPublicKey` and `signature`.
+    *   **Receiver**: Bob receives the message, verifies the `signature` using the same identity secret, and derives the **Root AES Key** from `(Bob_Static_Private * Alice_Ephemeral_Public)`.
+2.  **Encryption**:
+    *   Payload (Text, Image, or Audio) is encrypted using **WASM-powered AES-256-GCM**.
+3.  **The Symmetric Ratchet**:
+    *   Immediately after sending/receiving, both parties run the Root Key through a **SHA-256 hash function**.
+    *   The old key is deleted. The hash becomes the key for the next message.
+    *   **Result**: Perfect Forward Secrecy (PFS) is achieved.
 
-## 5. Session Termination (Nuclear Logout)
-**Trigger:** User clicks the logout button.
+4.  **Handshake Collision Resolution (Race Condition Fix)**:
+    *   If Alice and Bob send their first message at the exact same time, both act as initiators.
+    *   **Rule**: The user with the lexicographically smaller username ("Alice" < "Bob") wins the tie-break.
+    *   **Winner**: Decrypts the incoming message using the loser's key but maintains their own session.
+    *   **Loser**: Discards their own session and adopts the winner's key.
+    *   **Result**: Seamless synchronization without any extra server-side logic.
 
-1.  **Vault Backup:** The system reads the `myPrivateKey` from RAM and the latest contact list from IndexedDB, creates a final backup vault file, and triggers a download.
-2.  **Nuclear Wipe:** 
-    *   Deletes the IndexedDB database (Messages & Contacts).
-    *   Clears `localStorage` (Session keys & Auth tokens).
-    *   Hard-refreshes the browser to purge all sensitive keys from active RAM.
+## 5. Media & Files (Pure Memory Routing)
+**Goal:** Handle large binary data without persistent storage or disk footprint.
+
+1.  **WASM Engine**: High-speed C++ compiled WebAssembly handles the heavy lifting of encrypting multi-megabyte images/audio on the client side.
+2.  **Base64 Pipeline**: Encrypted blobs are transmitted as Base64 strings directly over the WebSocket within the message payload.
+3.  **Zero-Footprint Routing**: The "Blind Router" (Server) receives the encrypted string in RAM and immediately forwards it to the receiver's socket. 
+    *   **Security Principle**: No files are ever written to the server's disk. There is no `uploads/` folder and no temporary storage, ensuring that even a physical server compromise yields zero historical media data.
+
+## 6. Termination (Nuclear Logout)
+**Goal:** Leave zero traces on the device.
+
+1.  **Wipe**: The user can choose to wipe the **Local Device Cache** (IndexedDB).
+2.  **Purge**: `sessionStorage` and `localStorage` cache are cleared.
+3.  **Server Disconnect**: The socket is disconnected and the user is removed from the `onlineUsers` map.

@@ -1,11 +1,6 @@
 import { Router } from "express";
 import { prisma } from "./db.js";
 import srp from "secure-remote-password/server.js";
-import { fileURLToPath } from "url";
-import path from "path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const router = Router();
 const activeLoginChallenges = new Map<string, { ephemeralSecret: string }>();
 
@@ -26,8 +21,10 @@ router.post("/register", async (req, res) => {
       .status(200)
       .json({ success: true, message: "Zero-Knowledge Identity Created" });
   } catch (error: any) {
-    if (error?.code === 'P2002') {
-      console.error(`[DB] Registration Error: Username '${username}' is already taken.`);
+    if (error?.code === "P2002") {
+      console.error(
+        `[DB] Registration Error: Username '${username}' is already taken.`,
+      );
     } else {
       console.error("[DB] Registration Error:", error?.message || error);
     }
@@ -271,12 +268,10 @@ router.get("/request/sent/:username", async (req, res) => {
     res.status(200).json({ requests: sent.map((r) => r.receiverUsername) });
   } catch (err) {
     console.error("[API] Get sent requests error:", err);
-    res
-      .status(500)
-      .json({
-        error: "Database error.",
-        details: err instanceof Error ? err.message : String(err),
-      });
+    res.status(500).json({
+      error: "Database error.",
+      details: err instanceof Error ? err.message : String(err),
+    });
   }
 });
 
@@ -305,8 +300,24 @@ router.post("/request/accept", async (req, res) => {
   const { sender, receiver } = req.body;
 
   try {
-    await prisma.friendRequest.updateMany({
-      where: { senderUsername: sender, receiverUsername: receiver },
+    const request = await prisma.friendRequest.findFirst({
+      where: {
+        senderUsername: sender,
+        receiverUsername: receiver,
+        status: "pending",
+      },
+    });
+
+    if (!request) {
+      return res
+        .status(400)
+        .json({
+          error: "Friend request no longer exists or has been revoked.",
+        });
+    }
+
+    await prisma.friendRequest.update({
+      where: { id: request.id },
       data: { status: "accepted" },
     });
 
@@ -434,12 +445,10 @@ router.get("/friends/:username", async (req, res) => {
     res.status(200).json({ friends: friendNames });
   } catch (err) {
     console.error("[API] Get friends error:", err);
-    res
-      .status(500)
-      .json({
-        error: "Failed to fetch friends.",
-        details: err instanceof Error ? err.message : String(err),
-      });
+    res.status(500).json({
+      error: "Failed to fetch friends.",
+      details: err instanceof Error ? err.message : String(err),
+    });
   }
 });
 
@@ -513,12 +522,10 @@ router.get("/blocked/:username", async (req, res) => {
     res.status(200).json({ blocked: blocked.map((b) => b.blockedUsername) });
   } catch (err) {
     console.error("[API] Get blocked users error:", err);
-    res
-      .status(500)
-      .json({
-        error: "Database error.",
-        details: err instanceof Error ? err.message : String(err),
-      });
+    res.status(500).json({
+      error: "Database error.",
+      details: err instanceof Error ? err.message : String(err),
+    });
   }
 });
 

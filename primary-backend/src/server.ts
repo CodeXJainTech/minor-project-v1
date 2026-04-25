@@ -5,13 +5,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import api from "./api.js";
 import { prisma } from "./db.js";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
 import helmet from "helmet";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const ALLOWED_ORIGINS = [`${process.env.FRONTEND_URL}`];
 const app = express();
 app.use(helmet());
@@ -22,7 +16,6 @@ app.use(
   }),
 );
 app.use(express.json());
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 app.use("/api", api);
 
 const httpServer = createServer(app);
@@ -32,26 +25,6 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"],
   },
 });
-
-// Self-Destructing Media Folder Timer (Every minute, delete > 5 mins old)
-setInterval(() => {
-  const uploadDir = path.join(__dirname, "../uploads");
-  if (fs.existsSync(uploadDir)) {
-    fs.readdir(uploadDir, (err, files) => {
-      if (err) return;
-      const now = Date.now();
-      files.forEach(file => {
-        const filePath = path.join(uploadDir, file);
-        fs.stat(filePath, (err, stats) => {
-          if (err) return;
-          if (now - stats.mtimeMs > 5 * 60 * 1000) {
-            fs.unlink(filePath, () => console.log(`[Media] Deleted expired file: ${file}`));
-          }
-        });
-      });
-    });
-  }
-}, 60 * 1000);
 
 // Track online users: Map<Username, SocketID>
 const onlineUsers = new Map<string, string>();
@@ -66,7 +39,7 @@ io.on("connection", (socket) => {
 
     // Send full list of online users to the newly connected client
     socket.emit("online_users", Array.from(onlineUsers.keys()));
-    
+
     // Broadcast status to all other active sockets
     socket.broadcast.emit("user_connected", username);
   });
@@ -95,7 +68,10 @@ io.on("connection", (socket) => {
       io.to(targetSocketId).emit("receive_message", payload);
     } else {
       console.log(`[Router] ${payload.to} is offline. Dropping message.`);
-      socket.emit("message_failed", { to: payload.to, error: "User is offline. Message dropped." });
+      socket.emit("message_failed", {
+        to: payload.to,
+        error: "User is offline. Message dropped.",
+      });
     }
   });
 
@@ -156,6 +132,16 @@ io.on("connection", (socket) => {
 
     if (blockedSocketId) {
       io.to(blockedSocketId).emit("user_blocked_you", blocker);
+    }
+  });
+
+  // Forward friend request revocation
+  socket.on("revoke_friend_request", (data) => {
+    const { sender, receiver } = data;
+    const receiverSocketId = onlineUsers.get(receiver);
+
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("request_revoked", sender);
     }
   });
 });
