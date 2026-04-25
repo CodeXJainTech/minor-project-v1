@@ -4,7 +4,19 @@ import { encryptAES } from "../crypto/aes_wasm";
 import { db } from "../services/db";
 import { useLiveQuery } from "dexie-react-hooks";
 import toast from "react-hot-toast";
+import { encryptLocal, decryptLocal } from "../crypto/localStore";
 import { ratchetKey } from "../crypto/ratchet";
+import type { SavedMessage } from "../services/db";
+
+export interface DecryptedMessage {
+  id?: number;
+  from: string;
+  to: string;
+  ciphertext: string;
+  decryptedText: string;
+  type: 'text' | 'image' | 'audio';
+  timestamp: number;
+}
 
 export function useChat(
   user: string,
@@ -15,7 +27,36 @@ export function useChat(
   const [input, setInput] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
-  const messages = useLiveQuery(() => db.messages.toArray()) || [];
+  const rawMessages = useLiveQuery(() => db.messages.toArray()) || [];
+  const [messages, setMessages] = useState<DecryptedMessage[]>([]);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const decryptAll = async () => {
+      if (!myPrivateKey || rawMessages.length === 0) {
+        if (isMounted) setMessages([]);
+        return;
+      }
+      
+      const decrypted: DecryptedMessage[] = [];
+      for (const msg of rawMessages) {
+        if (!msg.payload) continue; // Skip legacy plaintext messages that don't match the new payload schema
+        try {
+          const jsonStr = await decryptLocal(msg.payload, myPrivateKey);
+          const obj = JSON.parse(jsonStr);
+          decrypted.push({ ...obj, id: msg.id });
+        } catch (e) {
+          // If decryption fails, it might be a corrupted or mismatched key msg.
+        }
+      }
+      
+      decrypted.sort((a, b) => a.timestamp - b.timestamp);
+      const filtered = decrypted.filter(m => m.from === user || m.to === user);
+      if (isMounted) setMessages(filtered);
+    };
+    decryptAll();
+    return () => { isMounted = false; };
+  }, [rawMessages, myPrivateKey]);
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || !activeChat || !myPrivateKey || isSending) return;
@@ -46,13 +87,17 @@ export function useChat(
       socket.emit("private_message", payload);
 
       // 5. Save locally
-      await db.messages.add({
+      const msgObj = {
         from: user,
         to: targetUser,
         decryptedText: plaintext,
         ciphertext,
         type: "text",
         timestamp: Date.now(),
+      };
+      
+      await db.messages.add({
+        payload: await encryptLocal(JSON.stringify(msgObj), myPrivateKey)
       });
     } catch (error) {
       toast.error("Failed to send message.");
@@ -115,32 +160,25 @@ export function useChat(
           const nextKey = await ratchetKey(currentAesKey);
           localStorage.setItem(`session_${user}_${targetUser}`, nextKey);
 
-          const blob = new Blob([ciphertext], { type: "text/plain" });
-          const formData = new FormData();
-          formData.append("encryptedFile", blob);
-          const uploadRes = await fetch(
-            `${import.meta.env.VITE_API_URL}/api/upload`,
-            {
-              method: "POST",
-              body: formData,
-            },
-          );
-          if (!uploadRes.ok) throw new Error("Upload failed.");
-          const { url } = await uploadRes.json();
           const payload = {
             to: targetUser,
             from: user,
-            ciphertext: url, // url to fetch the ciphertext
+            ciphertext, // directly send the encrypted base64 string
             type: "image",
           };
           socket.emit("private_message", payload);
-          await db.messages.add({
+
+          const msgObj = {
             from: user,
             to: targetUser,
             decryptedText: optimizedBase64,
             ciphertext,
             type: "image",
             timestamp: Date.now(),
+          };
+
+          await db.messages.add({
+            payload: await encryptLocal(JSON.stringify(msgObj), myPrivateKey)
           });
         } catch (err) {
           toast.error("Failed to send image.");
@@ -186,36 +224,25 @@ export function useChat(
             const nextKey = await ratchetKey(currentAesKey);
             localStorage.setItem(`session_${user}_${targetUser}`, nextKey);
 
-            const blob = new Blob([ciphertext], { type: "text/plain" });
-            const formData = new FormData();
-            formData.append("encryptedFile", blob);
-            
-            const uploadRes = await fetch(
-              `${import.meta.env.VITE_API_URL}/api/upload`,
-              {
-                method: "POST",
-                body: formData,
-              },
-            );
-            
-            if (!uploadRes.ok) throw new Error("Upload failed.");
-            const { url } = await uploadRes.json();
-            
             const payload = {
               to: targetUser,
               from: user,
-              ciphertext: url,
+              ciphertext,
               type: "audio",
             };
             
             socket.emit("private_message", payload);
-            await db.messages.add({
+            const msgObj = {
               from: user,
               to: targetUser,
               decryptedText: base64Audio,
               ciphertext,
               type: "audio",
               timestamp: Date.now(),
+            };
+
+            await db.messages.add({
+              payload: await encryptLocal(JSON.stringify(msgObj), myPrivateKey)
             });
           } catch (err) {
             toast.error("Failed to send audio.");

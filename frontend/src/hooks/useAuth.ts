@@ -4,44 +4,21 @@ import { generateECCKeyPair, exportECCPublicKey } from "../crypto/ecc";
 import srp from "secure-remote-password/client";
 import toast from "react-hot-toast";
 import { db } from "../services/db";
+import { encryptVaultData, decryptVaultData, exportChatBackup, importChatBackup } from "../crypto/vault";
 
 export function useAuth() {
   const [user, setUser] = useState(localStorage.getItem("currentUser") || "");
   const [myPrivateKey, setMyPrivateKey] = useState<CryptoKey | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    const loadKey = async () => {
-      if (user) {
-        const savedKeyBase64 = localStorage.getItem(`privateKey_${user}`);
-        if (savedKeyBase64) {
-          try {
-            const binaryDerString = window.atob(savedKeyBase64);
-            const binaryDer = new Uint8Array(binaryDerString.length);
-            for (let i = 0; i < binaryDerString.length; i++)
-              binaryDer[i] = binaryDerString.charCodeAt(i);
-            const loadedKey = await window.crypto.subtle.importKey(
-              "pkcs8",
-              binaryDer.buffer,
-              { name: "ECDH", namedCurve: "P-256" },
-              true,
-              ["deriveKey", "deriveBits"],
-            );
-            setMyPrivateKey(loadedKey);
-          } catch (err) {
-            toast.error("Failed to load key from storage");
-          }
-        }
-      }
-    };
-    loadKey();
-  }, [user]);
+
 
   const handleLogin = async (
     username: string,
     password: string,
     isRegistering: boolean,
-    vaultFile?: File | null
+    vaultFile?: File | null,
+    vaultPassword?: string
   ) => {
     setIsLoading(true);
     try {
@@ -78,21 +55,14 @@ export function useAuth() {
         const base64PrivateKey = btoa(
           String.fromCharCode(...new Uint8Array(exportedPrivate)),
         );
+        // Securely cache the private key for returning logins
+        const encryptedCache = await encryptVaultData(base64PrivateKey, password);
+        localStorage.setItem(`encryptedPrivateKey_${username}`, encryptedCache);
         
-        // Vault Birth: Download the private key
-        const vaultData = JSON.stringify({ privateKey: base64PrivateKey, contacts: [] });
-        const blob = new Blob([vaultData], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `cipher_vault_${username}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        // Vault Birth: Do not download automatically anymore.
+        // User must click Download Vault in the UI.
 
       } else {
-        if (!vaultFile) {
-          throw new Error("Vault file is required for login!");
-        }
         const clientEphemeral = srp.generateEphemeral();
         const challengeRes = await fetch(
           `${import.meta.env.VITE_API_URL}/api/login/challenge`,
@@ -133,15 +103,44 @@ export function useAuth() {
 
         if (!verifyRes.ok) throw new Error("Invalid password!");
 
-        // Vault Login Checkpoint: Extract Private Key and Contacts
-        const fileContent = await vaultFile.text();
-        const vault = JSON.parse(fileContent);
+        // If vaultFile is missing, try to load from secure cache
+        let base64PrivateKeyToImport = "";
+        
+        if (!vaultFile) {
+          const cachedKey = localStorage.getItem(`encryptedPrivateKey_${username}`);
+          if (!cachedKey) {
+            throw new Error("Vault file is required when logging into a new device.");
+          }
+          try {
+            base64PrivateKeyToImport = await decryptVaultData(cachedKey, password);
+          } catch (err) {
+            throw new Error("Failed to decrypt cached key. If you changed your password or cache is corrupted, you must upload your vault file.");
+          }
+        } else {
+          // Vault Login Checkpoint: Extract Private Key and Contacts
+          const fileContent = await vaultFile.text();
+          const decryptedContent = await decryptVaultData(fileContent, vaultPassword);
+          const vault = JSON.parse(decryptedContent);
 
-        if (!vault.privateKey) {
-          throw new Error("Invalid vault file: Missing private key.");
+          if (!vault.privateKey) {
+            throw new Error("Invalid vault file: Missing private key.");
+          }
+          base64PrivateKeyToImport = vault.privateKey;
+
+          // Securely cache the newly imported private key
+          const encryptedCache = await encryptVaultData(base64PrivateKeyToImport, password);
+          localStorage.setItem(`encryptedPrivateKey_${username}`, encryptedCache);
+
+          if (vault.contacts && Array.isArray(vault.contacts)) {
+            await db.contacts.clear();
+            const validContacts = vault.contacts.filter((c: any) => c.id && c.payload);
+            if (validContacts.length > 0) {
+              await db.contacts.bulkAdd(validContacts);
+            }
+          }
         }
 
-        const binaryDerString = window.atob(vault.privateKey);
+        const binaryDerString = window.atob(base64PrivateKeyToImport);
         const binaryDer = new Uint8Array(binaryDerString.length);
         for (let i = 0; i < binaryDerString.length; i++)
           binaryDer[i] = binaryDerString.charCodeAt(i);
@@ -153,18 +152,14 @@ export function useAuth() {
           ["deriveKey", "deriveBits"],
         );
         setMyPrivateKey(loadedKey);
-
-        if (vault.contacts && Array.isArray(vault.contacts)) {
-          await db.contacts.clear();
-          await db.contacts.bulkAdd(vault.contacts);
-        }
       }
 
       localStorage.setItem("currentUser", username);
       setUser(username);
       socket.connect();
     } catch (err: any) {
-      toast.error(err.message);
+      console.error("Login Error:", err);
+      toast.error(err?.message || "An unknown error occurred during login.");
     } finally {
       setIsLoading(false);
     }
@@ -189,31 +184,100 @@ export function useAuth() {
     };
   }, [user, myPrivateKey]);
 
-  const handleLogout = async () => {
+  const handleDownloadVault = async (vaultPassword?: string) => {
+    if (!myPrivateKey || !user) return;
+    try {
+      const exportedPrivate = await window.crypto.subtle.exportKey("pkcs8", myPrivateKey);
+      const base64PrivateKey = btoa(String.fromCharCode(...new Uint8Array(exportedPrivate)));
+      const contacts = await db.contacts.toArray();
+      const vaultData = JSON.stringify({ privateKey: base64PrivateKey, contacts });
+      
+      const encryptedData = await encryptVaultData(vaultData, vaultPassword);
+      
+      const blob = new Blob([encryptedData], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cipher_vault_${user}.vault`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Vault downloaded securely.");
+    } catch (err: any) {
+      toast.error("Failed to download vault: " + err.message);
+    }
+  };
+
+  const handleExportChats = async (password: string) => {
+    try {
+      if (!user) return;
+      const backupString = await exportChatBackup(password);
+      const blob = new Blob([backupString], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cipher_chats_${user}.cipherbackup`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Chat history backed up securely.");
+    } catch (err: any) {
+      toast.error("Failed to backup chats: " + err.message);
+    }
+  };
+
+  const handleImportChats = async (file: File, password: string) => {
+    try {
+      const content = await file.text();
+      await importChatBackup(content, password);
+      toast.success("Chat history restored successfully.");
+    } catch (err: any) {
+      toast.error("Failed to restore chats: " + err.message);
+    }
+  };
+
+  const handleWipeCache = async () => {
+    try {
+      await db.messages.clear();
+      await db.contacts.clear();
+      // Optional: wipe ratchet state
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(`session_${user}_`)) {
+          keysToRemove.push(key);
+        }
+      }
+      for (const key of keysToRemove) {
+         localStorage.removeItem(key);
+      }
+      
+      toast.success("Local cache completely wiped.");
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err: any) {
+      toast.error("Failed to wipe cache: " + err.message);
+    }
+  };
+
+  const handleLogout = async (shouldDownload: boolean = false, vaultPassword?: string, clearCache: boolean = false) => {
     if (!myPrivateKey || !user) return;
     
-    // 1. Export private key
-    const exportedPrivate = await window.crypto.subtle.exportKey("pkcs8", myPrivateKey);
-    const base64PrivateKey = btoa(String.fromCharCode(...new Uint8Array(exportedPrivate)));
+    if (shouldDownload) {
+      await handleDownloadVault(vaultPassword);
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Ensure download begins before reload
+    }
+
+    if (clearCache) {
+      await db.messages.clear();
+      await db.contacts.clear();
+    }
     
-    // 2. Export contacts
-    const contacts = await db.contacts.toArray();
-    
-    // 3. Create Vault backup
-    const vaultData = JSON.stringify({ privateKey: base64PrivateKey, contacts });
-    const blob = new Blob([vaultData], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `cipher_vault_backup_${user}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    // 4. Nuclear wipe
-    await db.delete();
-    localStorage.clear();
+    // Secure sign out
+    localStorage.removeItem("currentUser");
+    setMyPrivateKey(null);
+    setUser("");
     window.location.reload();
   };
 
@@ -224,6 +288,10 @@ export function useAuth() {
     setMyPrivateKey,
     handleLogin,
     handleLogout,
+    handleDownloadVault,
+    handleExportChats,
+    handleImportChats,
+    handleWipeCache,
     isLoading,
   };
 }

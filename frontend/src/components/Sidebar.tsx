@@ -19,9 +19,13 @@ interface SidebarProps {
   showBlockPanel: boolean;
   setShowBlockPanel: (show: boolean) => void;
   getRelationship: (username: string) => "friend" | "sent" | "pending" | "none";
-  onLogout: () => void;
+  onLogout: (shouldDownload: boolean, password?: string, clearCache?: boolean) => void;
+  onDownloadVault: (password?: string) => void;
   onlineUsers: string[];
   onRevokeRequest: (target: string) => void;
+  onExportChats: (password: string) => void;
+  onImportChats: (file: File, password: string) => void;
+  onWipeCache: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -44,10 +48,20 @@ const Sidebar: React.FC<SidebarProps> = ({
   setShowBlockPanel,
   getRelationship,
   onLogout,
+  onDownloadVault,
   onlineUsers,
   onRevokeRequest,
+  onExportChats,
+  onImportChats,
+  onWipeCache,
 }) => {
   const [activeTab, setActiveTab] = React.useState<"active" | "requests">("active");
+  const [showLogoutModal, setShowLogoutModal] = React.useState(false);
+  const [showDownloadModal, setShowDownloadModal] = React.useState(false);
+  const [vaultPassword, setVaultPassword] = React.useState("");
+  const [backupOnLogout, setBackupOnLogout] = React.useState(true);
+  const [clearCacheOnLogout, setClearCacheOnLogout] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   return (
     <div className="w-1/4 max-w-sm bg-slate-900 border-r border-slate-800 flex flex-col z-10">
@@ -61,7 +75,16 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
         <div className="flex gap-2">
           <button
-            onClick={onLogout}
+            onClick={() => setShowDownloadModal(true)}
+            className="p-2 hover:bg-slate-800 rounded-lg transition text-indigo-400 hover:text-indigo-300"
+            title="Download Vault"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+            </svg>
+          </button>
+          <button
+            onClick={() => setShowLogoutModal(true)}
             className="p-2 hover:bg-slate-800 rounded-lg transition text-red-400 hover:text-red-300"
             title="Nuclear Logout"
           >
@@ -97,6 +120,118 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
+      <input 
+        type="file" 
+        accept=".cipherbackup" 
+        ref={fileInputRef} 
+        style={{ display: "none" }} 
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            const file = e.target.files[0];
+            const pwd = window.prompt("Enter the password for this chat backup:");
+            if (pwd !== null) {
+              onImportChats(file, pwd);
+            }
+          }
+          e.target.value = "";
+        }} 
+      />
+
+      {showDownloadModal && (
+        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold text-slate-100 mb-2">Secure Vault Backup</h3>
+            <p className="text-xs text-slate-400 mb-4">
+              Enter an optional password to encrypt your vault file. If left blank, it will be stored in standard format.
+            </p>
+            <input
+              type="password"
+              placeholder="Vault Password (Optional)"
+              value={vaultPassword}
+              onChange={(e) => setVaultPassword(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-100 mb-6 placeholder-slate-500"
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setShowDownloadModal(false); setVaultPassword(""); }}
+                className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  onDownloadVault(vaultPassword);
+                  setShowDownloadModal(false);
+                  setVaultPassword("");
+                }}
+                className="px-4 py-2 text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors shadow-md"
+              >
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLogoutModal && (
+        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold text-red-400 mb-2">Initiate Disconnect</h3>
+            <p className="text-xs text-slate-400 mb-4">
+              Your messages will be preserved in a local encrypted cache. You will need your password to log back in.
+            </p>
+            <label className="flex items-center gap-2 mb-4 text-sm text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={backupOnLogout}
+                onChange={(e) => setBackupOnLogout(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 bg-slate-950"
+              />
+              Download vault backup before logout
+            </label>
+            <label className="flex items-center gap-2 mb-4 text-sm text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={clearCacheOnLogout}
+                onChange={(e) => setClearCacheOnLogout(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-700 text-red-600 focus:ring-red-500 focus:ring-offset-slate-900 bg-slate-950"
+              />
+              Wipe Local Device Cache (Messages)
+            </label>
+            {backupOnLogout && (
+              <input
+                type="password"
+                placeholder="Vault Password (Optional)"
+                value={vaultPassword}
+                onChange={(e) => setVaultPassword(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-100 mb-6 placeholder-slate-500"
+              />
+            )}
+            <div className="flex justify-end gap-3 mt-2">
+              <button
+                onClick={() => { setShowLogoutModal(false); setVaultPassword(""); }}
+                className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  onLogout(backupOnLogout, backupOnLogout ? vaultPassword : "", clearCacheOnLogout);
+                  setShowLogoutModal(false);
+                  setVaultPassword("");
+                }}
+                className="px-4 py-2 text-sm font-bold bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors shadow-md flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                </svg>
+                Confirm Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showBlockPanel && (
         <div className="m-4 p-3 bg-slate-800 rounded-xl border border-slate-700 shadow-sm">
           <div className="flex justify-between items-center mb-2">
@@ -130,6 +265,37 @@ const Sidebar: React.FC<SidebarProps> = ({
               </div>
             ))
           )}
+
+          <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              Data Management
+            </h3>
+            <button
+              onClick={() => {
+                const pwd = window.prompt("Enter a password to encrypt your chat backup:");
+                if (pwd) onExportChats(pwd);
+              }}
+              className="w-full px-3 py-2 bg-slate-900 text-indigo-400 text-xs font-bold rounded-lg border border-slate-700 hover:bg-slate-700 hover:text-indigo-300 transition text-left"
+            >
+              Export Chat Backup (.cipherbackup)
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full px-3 py-2 bg-slate-900 text-green-400 text-xs font-bold rounded-lg border border-slate-700 hover:bg-slate-700 hover:text-green-300 transition text-left"
+            >
+              Restore Chat Backup
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm("Are you SURE you want to wipe this device's cache? All messages will be permanently deleted unless you have a backup.")) {
+                  onWipeCache();
+                }
+              }}
+              className="w-full px-3 py-2 bg-red-900/30 text-red-400 text-xs font-bold rounded-lg border border-red-900/50 hover:bg-red-900/50 transition text-left"
+            >
+              Wipe Local Device Cache
+            </button>
+          </div>
         </div>
       )}
 

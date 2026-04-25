@@ -3,6 +3,7 @@ import { socket } from "../services/socket";
 import { decryptAES } from "../crypto/aes_wasm";
 import { db } from "../services/db";
 import toast from "react-hot-toast";
+import { encryptLocal } from "../crypto/localStore";
 import { ratchetKey } from "../crypto/ratchet";
 
 interface SocketListenersProps {
@@ -79,40 +80,24 @@ export function useSocketListeners({
         // 1. Get current key
         const currentAesKey = await getOrCreateSessionKey(payload.from);
 
-        let actualCiphertext = payload.ciphertext;
-        if (payload.type === "image" || payload.type === "audio") {
-          try {
-            const res = await fetch(payload.ciphertext);
-            if (!res.ok) {
-              throw new Error(`Failed to fetch media: ${res.status} ${res.statusText} at ${payload.ciphertext}`);
-            }
-            actualCiphertext = await res.text();
-            
-            // Basic validation: ciphertext should be base64
-            if (!actualCiphertext || actualCiphertext.length < 10) {
-               throw new Error("Fetched media ciphertext is too short or empty.");
-            }
-          } catch (fetchError) {
-            toast.error("Failed to fetch media message");
-            throw fetchError; // Re-throw to be caught by the outer catch
-          }
-        }
-
-
         // 2. Decrypt the message
-        const plaintext = await decryptAES(actualCiphertext, currentAesKey);
+        const plaintext = await decryptAES(payload.ciphertext, currentAesKey);
 
         // 3. THE RATCHET: Move the lock forward
         const nextKey = await ratchetKey(currentAesKey);
         localStorage.setItem(`session_${user}_${payload.from}`, nextKey);
 
-        await db.messages.add({
+        const msgObj = {
           from: payload.from,
           to: user,
           decryptedText: plaintext,
           ciphertext: payload.ciphertext,
           type: payload.type || "text",
           timestamp: Date.now(),
+        };
+
+        await db.messages.add({
+          payload: await encryptLocal(JSON.stringify(msgObj), myPrivateKey)
         });
       } catch (error) {
         toast.error("Failed to decrypt incoming message.");

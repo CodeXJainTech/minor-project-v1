@@ -9,6 +9,7 @@ import {
 } from "../crypto/ecc";
 import { db } from "../services/db";
 import CryptoJS from "crypto-js";
+import { encryptLocal, decryptLocal } from "../crypto/localStore";
 
 export function useRatchet(user: string, myPrivateKey: CryptoKey | null) {
   const getOrCreateSessionKey = useCallback(
@@ -33,13 +34,25 @@ export function useRatchet(user: string, myPrivateKey: CryptoKey | null) {
       const serverPublicKeyBase64 = response.publicKey;
 
       // 3. Security Firewall (TOFU)
-      const existingContact = await db.contacts.get(targetUsername);
+      const hashedUsername = CryptoJS.SHA256(targetUsername).toString();
+      const existingContact = await db.contacts.get(hashedUsername);
       if (existingContact) {
-        if (existingContact.publicKey !== serverPublicKeyBase64) {
+        let contactObj: any = {};
+        try {
+          const jsonStr = await decryptLocal(existingContact.payload, myPrivateKey);
+          contactObj = JSON.parse(jsonStr);
+        } catch (e) {
+          // Fallback if legacy or corrupt
+        }
+        if (contactObj.publicKey && contactObj.publicKey !== serverPublicKeyBase64) {
           throw new Error("CRITICAL SECURITY ALERT: Target's public key has changed. Possible Man-in-the-Middle attack!");
         }
       } else {
-        await db.contacts.add({ username: targetUsername, publicKey: serverPublicKeyBase64 });
+        const contactObj = { username: targetUsername, publicKey: serverPublicKeyBase64 };
+        await db.contacts.add({ 
+          id: hashedUsername, 
+          payload: await encryptLocal(JSON.stringify(contactObj), myPrivateKey) 
+        });
       }
 
       const theirPublicKey = await importECCPublicKey(serverPublicKeyBase64);

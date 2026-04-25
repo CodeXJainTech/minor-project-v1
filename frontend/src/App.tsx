@@ -10,7 +10,7 @@ import { useRatchet } from "./hooks/useRatchet";
 import { Toaster } from "react-hot-toast";
 
 export default function App() {
-  const { user, myPrivateKey, handleLogin, handleLogout, isLoading } = useAuth();
+  const { user, myPrivateKey, handleLogin, handleLogout, handleDownloadVault, handleExportChats, handleImportChats, handleWipeCache, isLoading } = useAuth();
   const { getOrCreateSessionKey } = useRatchet(user, myPrivateKey);
 
   const {
@@ -90,7 +90,11 @@ export default function App() {
           setShowBlockPanel={setShowBlockPanel}
           getRelationship={getRelationship}
           onLogout={handleLogout}
+          onDownloadVault={handleDownloadVault}
           onlineUsers={onlineUsers}
+          onExportChats={handleExportChats}
+          onImportChats={handleImportChats}
+          onWipeCache={handleWipeCache}
         />
         <ChatWindow
           user={user}

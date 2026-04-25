@@ -1,39 +1,13 @@
 import { Router } from "express";
 import { prisma } from "./db.js";
 import srp from "secure-remote-password/server.js";
-import path from "path";
-import multer from "multer";
-import fs from "fs";
 import { fileURLToPath } from "url";
+import path from "path";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const router = Router();
 const activeLoginChallenges = new Map<string, { ephemeralSecret: string }>();
-
-// Ensure uploads directory exists
-const uploadDir = path.join(__dirname, "../uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Configure multer with 10MB limit
-const upload = multer({
-  dest: uploadDir,
-  limits: {
-    fileSize: 10 * 1024 * 1024,
-  },
-});
-
-// Upload encrypted file
-router.post("/upload", upload.single("encryptedFile"), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded." });
-  }
-
-  const fileUrl = `${process.env.API_URL}/uploads/${req.file.filename}`;
-  res.status(200).json({ url: fileUrl });
-});
 
 // Register a new user
 router.post("/register", async (req, res) => {
@@ -51,8 +25,12 @@ router.post("/register", async (req, res) => {
     res
       .status(200)
       .json({ success: true, message: "Zero-Knowledge Identity Created" });
-  } catch (error) {
-    console.error("[DB] Registration Error:", error);
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      console.error(`[DB] Registration Error: Username '${username}' is already taken.`);
+    } else {
+      console.error("[DB] Registration Error:", error?.message || error);
+    }
     res.status(400).json({ error: "Username already exists or invalid data." });
   }
 });

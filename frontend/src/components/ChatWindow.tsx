@@ -114,7 +114,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                       className={`mb-6 flex flex-col ${isMe ? "items-end" : "items-start"}`}
                     >
                       <div
-                        className={`px-3 py-2 rounded-2xl max-w-[75%] shadow-sm ${
+                        className={`px-3 py-2 rounded-2xl max-w-[75%] shadow-sm min-w-0 ${
                           isMe
                             ? "bg-indigo-600 text-white rounded-br-none"
                             : "bg-slate-800 border border-slate-700 text-slate-200 rounded-bl-none"
@@ -131,7 +131,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                         ) : msg.type === "audio" ? (
                           <audio controls src={msg.decryptedText} className="max-w-full h-10 outline-none" />
                         ) : (
-                          <p className="text-sm px-1 py-1 break-words whitespace-pre-wrap">
+                          <p className="text-sm px-1 py-1 break-all whitespace-pre-wrap min-w-0">
                             {msg.decryptedText}
                           </p>
                         )}

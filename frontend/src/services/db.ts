@@ -2,16 +2,11 @@ import { Dexie, type Table } from 'dexie';
 
 export interface SavedMessage {
   id?: number; // Auto-incremented by Dexie
-  from: string;
-  to: string;
-  ciphertext: string;
-  decryptedText: string;
-  type: 'text' | 'image' | 'audio';
-  timestamp: number;
+  payload: string; // Entire message object is JSON stringified and encrypted
 }
 export interface Contact {
-  username: string;
-  publicKey: string;
+  id: string; // SHA-256 Hash of username
+  payload: string; // Encrypted JSON of contact
 }
 
 class CipherDatabase extends Dexie {
@@ -22,9 +17,9 @@ class CipherDatabase extends Dexie {
     super('ProjectCipherDB');
     
     // Define database schema and indexes
-    this.version(2).stores({
-      messages: '++id, to, from, timestamp',
-      contacts: 'username'
+    this.version(4).stores({
+      messages: '++id',
+      contacts: 'id'
     });
   }
 }
