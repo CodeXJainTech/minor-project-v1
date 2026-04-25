@@ -6,7 +6,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import toast from "react-hot-toast";
 import { encryptLocal, decryptLocal } from "../crypto/localStore";
 import { ratchetKey } from "../crypto/ratchet";
-import type { SavedMessage } from "../services/db";
+import type { RatchetResult } from "./useRatchet";
 
 export interface DecryptedMessage {
   id?: number;
@@ -14,14 +14,14 @@ export interface DecryptedMessage {
   to: string;
   ciphertext: string;
   decryptedText: string;
-  type: 'text' | 'image' | 'audio';
+  type: "text" | "image" | "audio";
   timestamp: number;
 }
 
 export function useChat(
   user: string,
   myPrivateKey: CryptoKey | null,
-  getOrCreateSessionKey: (target: string) => Promise<string>,
+  getOrCreateSessionKey: (target: string) => Promise<RatchetResult>,
 ) {
   const [activeChat, setActiveChat] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -37,7 +37,7 @@ export function useChat(
         if (isMounted) setMessages([]);
         return;
       }
-      
+
       const decrypted: DecryptedMessage[] = [];
       for (const msg of rawMessages) {
         if (!msg.payload) continue; // Skip legacy plaintext messages that don't match the new payload schema
@@ -49,13 +49,17 @@ export function useChat(
           // If decryption fails, it might be a corrupted or mismatched key msg.
         }
       }
-      
+
       decrypted.sort((a, b) => a.timestamp - b.timestamp);
-      const filtered = decrypted.filter(m => m.from === user || m.to === user);
+      const filtered = decrypted.filter(
+        (m) => m.from === user || m.to === user,
+      );
       if (isMounted) setMessages(filtered);
     };
     decryptAll();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [rawMessages, myPrivateKey]);
 
   const sendMessage = useCallback(async () => {
@@ -66,8 +70,12 @@ export function useChat(
     setIsSending(true);
 
     try {
-      // 1. Get current key
-      const currentAesKey = await getOrCreateSessionKey(targetUser);
+      // 1. Get current key (optionally initiates handshake)
+      const {
+        key: currentAesKey,
+        eph,
+        sig,
+      } = await getOrCreateSessionKey(targetUser);
 
       // 2. Encrypt the text using the WASM engine
       const ciphertext = await encryptAES(plaintext, currentAesKey);
@@ -82,6 +90,8 @@ export function useChat(
         from: user,
         ciphertext: ciphertext,
         type: "text",
+        eph, // Include ephemeral key if it's a new session
+        sig, // Include signature
       };
 
       socket.emit("private_message", payload);
@@ -95,12 +105,12 @@ export function useChat(
         type: "text",
         timestamp: Date.now(),
       };
-      
+
       await db.messages.add({
-        payload: await encryptLocal(JSON.stringify(msgObj), myPrivateKey)
+        payload: await encryptLocal(JSON.stringify(msgObj), myPrivateKey),
       });
-    } catch (error) {
-      toast.error("Failed to send message.");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to send message.");
     } finally {
       setIsSending(false);
     }
@@ -154,7 +164,11 @@ export function useChat(
           // Optimize image quality before encryption
           const optimizedBase64 = canvas.toDataURL("image/jpeg", 0.7);
 
-          const currentAesKey = await getOrCreateSessionKey(targetUser);
+          const {
+            key: currentAesKey,
+            eph,
+            sig,
+          } = await getOrCreateSessionKey(targetUser);
           const ciphertext = await encryptAES(optimizedBase64, currentAesKey);
 
           const nextKey = await ratchetKey(currentAesKey);
@@ -165,6 +179,8 @@ export function useChat(
             from: user,
             ciphertext, // directly send the encrypted base64 string
             type: "image",
+            eph,
+            sig,
           };
           socket.emit("private_message", payload);
 
@@ -178,10 +194,10 @@ export function useChat(
           };
 
           await db.messages.add({
-            payload: await encryptLocal(JSON.stringify(msgObj), myPrivateKey)
+            payload: await encryptLocal(JSON.stringify(msgObj), myPrivateKey),
           });
-        } catch (err) {
-          toast.error("Failed to send image.");
+        } catch (err: any) {
+          toast.error(err.message || "Failed to send image.");
         } finally {
           setIsSending(false);
           e.target.value = "";
@@ -208,7 +224,7 @@ export function useChat(
         e.target.value = "";
         return;
       }
-      
+
       const targetUser = activeChat;
       setIsSending(true);
 
@@ -217,8 +233,12 @@ export function useChat(
         reader.onloadend = async () => {
           try {
             const base64Audio = reader.result as string;
-            
-            const currentAesKey = await getOrCreateSessionKey(targetUser);
+
+            const {
+              key: currentAesKey,
+              eph,
+              sig,
+            } = await getOrCreateSessionKey(targetUser);
             const ciphertext = await encryptAES(base64Audio, currentAesKey);
 
             const nextKey = await ratchetKey(currentAesKey);
@@ -229,8 +249,10 @@ export function useChat(
               from: user,
               ciphertext,
               type: "audio",
+              eph,
+              sig,
             };
-            
+
             socket.emit("private_message", payload);
             const msgObj = {
               from: user,
@@ -242,16 +264,16 @@ export function useChat(
             };
 
             await db.messages.add({
-              payload: await encryptLocal(JSON.stringify(msgObj), myPrivateKey)
+              payload: await encryptLocal(JSON.stringify(msgObj), myPrivateKey),
             });
-          } catch (err) {
-            toast.error("Failed to send audio.");
+          } catch (err: any) {
+            toast.error(err.message || "Failed to send audio.");
           } finally {
             setIsSending(false);
             e.target.value = "";
           }
         };
-        
+
         reader.readAsDataURL(file);
       } catch (err) {
         toast.error("Failed to read audio file.");

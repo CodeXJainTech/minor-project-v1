@@ -90,11 +90,18 @@ export function useSocial(
   const acceptRequest = useCallback(
     async (requester: string) => {
       try {
-        await fetch(`${import.meta.env.VITE_API_URL}/api/request/accept`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sender: requester, receiver: user }),
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/api/request/accept`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sender: requester, receiver: user }),
+          },
+        );
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to accept request.");
+        }
         socket.emit("accept_friend_request", {
           sender: requester,
           receiver: user,
@@ -102,8 +109,8 @@ export function useSocial(
         setPendingRequests((prev) => prev.filter((r) => r !== requester));
         setFriendsList((prev) => [...prev, requester]);
         toast.success(`You are now friends with ${requester}!`);
-      } catch (err) {
-        toast.error("Failed to accept request.");
+      } catch (err: any) {
+        toast.error(err.message || "Failed to accept request.");
       }
     },
     [user],
@@ -112,19 +119,26 @@ export function useSocial(
   const rejectRequest = useCallback(
     async (requester: string) => {
       try {
-        await fetch(`${import.meta.env.VITE_API_URL}/api/request/reject`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sender: requester, receiver: user }),
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/api/request/reject`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sender: requester, receiver: user }),
+          },
+        );
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to reject request.");
+        }
         socket.emit("reject_friend_request", {
           sender: requester,
           receiver: user,
         });
         setPendingRequests((prev) => prev.filter((r) => r !== requester));
         toast.success(`Request from ${requester} rejected.`);
-      } catch (err) {
-        toast.error("Failed to reject request.");
+      } catch (err: any) {
+        toast.error(err.message || "Failed to reject request.");
       }
     },
     [user],
@@ -133,14 +147,22 @@ export function useSocial(
   const revokeRequest = useCallback(
     async (targetUser: string) => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/request/revoke`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sender: user, receiver: targetUser }),
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/api/request/revoke`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sender: user, receiver: targetUser }),
+          },
+        );
         const data = await res.json();
-        if (!res.ok) return toast.error(data.error || "Failed to revoke request.");
-        
+        if (!res.ok)
+          return toast.error(data.error || "Failed to revoke request.");
+
+        socket.emit("revoke_friend_request", {
+          sender: user,
+          receiver: targetUser,
+        });
         setSentRequests((prev) => prev.filter((u) => u !== targetUser));
         toast.success(`Request to ${targetUser} revoked.`);
       } catch (err) {
@@ -177,15 +199,19 @@ export function useSocial(
   const unblockUser = useCallback(
     async (targetUser: string) => {
       try {
-        await fetch(`${import.meta.env.VITE_API_URL}/api/unblock`, {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/unblock`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ blocker: user, blocked: targetUser }),
         });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to unblock user.");
+        }
         setBlockedUsers((prev) => prev.filter((u) => u !== targetUser));
         toast.success(`${targetUser} unblocked.`);
-      } catch (err) {
-        toast.error("Failed to unblock user.");
+      } catch (err: any) {
+        toast.error(err.message || "Failed to unblock user.");
       }
     },
     [user],

@@ -1,7 +1,13 @@
 import { useState } from "react";
 
 interface LoginFormProps {
-  onLogin: (username: string, password: string, isRegistering: boolean, vaultFile?: File | null, vaultPassword?: string) => void;
+  onLogin: (
+    username: string,
+    password: string,
+    isRegistering: boolean,
+    vaultFile?: File | null,
+    vaultPassword?: string,
+  ) => void;
   isLoading: boolean;
 }
 
@@ -24,8 +30,8 @@ export default function LoginForm({ onLogin, isLoading }: LoginFormProps) {
       className={`min-h-screen bg-slate-950 flex items-center justify-center p-4 ${isLoading ? "cursor-wait" : ""}`}
     >
       <div className="max-w-md w-full bg-slate-900/80 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden border border-slate-800">
-        <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 px-8 py-10 text-center text-white">
-          <h1 className="text-3xl font-extrabold tracking-tight mb-2">Project Cipher</h1>
+        <div className="bg-linear-to-r from-indigo-600 to-indigo-800 px-8 py-10 text-center text-white">
+          <h1 className="text-3xl font-extrabold tracking-tight mb-2">Krypt</h1>
           <p className="text-indigo-200 text-sm font-medium">
             Zero-Knowledge Authentication
           </p>
@@ -75,11 +81,16 @@ export default function LoginForm({ onLogin, isLoading }: LoginFormProps) {
                   disabled={isLoading}
                   className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 text-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none disabled:opacity-50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                 />
-                <p className="text-xs text-slate-500 mt-1">Optional. Only required if logging in from a new device.</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Optional. Only required if logging in from a new device.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Vault Password <span className="text-slate-500 text-xs font-normal">(if encrypted)</span>
+                  Vault Password{" "}
+                  <span className="text-slate-500 text-xs font-normal">
+                    (if encrypted)
+                  </span>
                 </label>
                 <input
                   type="password"

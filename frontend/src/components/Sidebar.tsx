@@ -19,7 +19,11 @@ interface SidebarProps {
   showBlockPanel: boolean;
   setShowBlockPanel: (show: boolean) => void;
   getRelationship: (username: string) => "friend" | "sent" | "pending" | "none";
-  onLogout: (shouldDownload: boolean, password?: string, clearCache?: boolean) => void;
+  onLogout: (
+    shouldDownload: boolean,
+    password?: string,
+    clearCache?: boolean,
+  ) => void;
   onDownloadVault: (password?: string) => void;
   onlineUsers: string[];
   onRevokeRequest: (target: string) => void;
@@ -55,7 +59,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   onImportChats,
   onWipeCache,
 }) => {
-  const [activeTab, setActiveTab] = React.useState<"active" | "requests">("active");
+  const [activeTab, setActiveTab] = React.useState<"active" | "requests">(
+    "active",
+  );
   const [showLogoutModal, setShowLogoutModal] = React.useState(false);
   const [showDownloadModal, setShowDownloadModal] = React.useState(false);
   const [vaultPassword, setVaultPassword] = React.useState("");
@@ -67,7 +73,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     <div className="w-1/4 max-w-sm bg-slate-900 border-r border-slate-800 flex flex-col z-10">
       <div className="p-5 bg-slate-950 text-white flex justify-between items-center border-b border-slate-800">
         <div>
-          <h2 className="text-xl font-bold tracking-tight">Project Cipher</h2>
+          <h2 className="text-xl font-bold tracking-tight">Krypt</h2>
           <p className="text-xs text-indigo-400 mt-1 flex items-center gap-1 font-medium">
             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
             {user}
@@ -79,8 +85,18 @@ const Sidebar: React.FC<SidebarProps> = ({
             className="p-2 hover:bg-slate-800 rounded-lg transition text-indigo-400 hover:text-indigo-300"
             title="Download Vault"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              ></path>
             </svg>
           </button>
           <button
@@ -88,8 +104,18 @@ const Sidebar: React.FC<SidebarProps> = ({
             className="p-2 hover:bg-slate-800 rounded-lg transition text-red-400 hover:text-red-300"
             title="Nuclear Logout"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+              ></path>
             </svg>
           </button>
           <button
@@ -120,29 +146,34 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      <input 
-        type="file" 
-        accept=".cipherbackup" 
-        ref={fileInputRef} 
-        style={{ display: "none" }} 
+      <input
+        type="file"
+        accept=".cipherbackup"
+        ref={fileInputRef}
+        style={{ display: "none" }}
         onChange={(e) => {
           if (e.target.files && e.target.files.length > 0) {
             const file = e.target.files[0];
-            const pwd = window.prompt("Enter the password for this chat backup:");
+            const pwd = window.prompt(
+              "Enter the password for this chat backup:",
+            );
             if (pwd !== null) {
               onImportChats(file, pwd);
             }
           }
           e.target.value = "";
-        }} 
+        }}
       />
 
       {showDownloadModal && (
         <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 w-full max-w-sm">
-            <h3 className="text-lg font-bold text-slate-100 mb-2">Secure Vault Backup</h3>
+            <h3 className="text-lg font-bold text-slate-100 mb-2">
+              Secure Vault Backup
+            </h3>
             <p className="text-xs text-slate-400 mb-4">
-              Enter an optional password to encrypt your vault file. If left blank, it will be stored in standard format.
+              Enter an optional password to encrypt your vault file. If left
+              blank, it will be stored in standard format.
             </p>
             <input
               type="password"
@@ -153,7 +184,10 @@ const Sidebar: React.FC<SidebarProps> = ({
             />
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => { setShowDownloadModal(false); setVaultPassword(""); }}
+                onClick={() => {
+                  setShowDownloadModal(false);
+                  setVaultPassword("");
+                }}
                 className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-slate-200"
               >
                 Cancel
@@ -176,9 +210,12 @@ const Sidebar: React.FC<SidebarProps> = ({
       {showLogoutModal && (
         <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 w-full max-w-sm">
-            <h3 className="text-lg font-bold text-red-400 mb-2">Initiate Disconnect</h3>
+            <h3 className="text-lg font-bold text-red-400 mb-2">
+              Initiate Disconnect
+            </h3>
             <p className="text-xs text-slate-400 mb-4">
-              Your messages will be preserved in a local encrypted cache. You will need your password to log back in.
+              Your messages will be preserved in a local encrypted cache. You
+              will need your password to log back in.
             </p>
             <label className="flex items-center gap-2 mb-4 text-sm text-slate-300 cursor-pointer">
               <input
@@ -209,21 +246,38 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
             <div className="flex justify-end gap-3 mt-2">
               <button
-                onClick={() => { setShowLogoutModal(false); setVaultPassword(""); }}
+                onClick={() => {
+                  setShowLogoutModal(false);
+                  setVaultPassword("");
+                }}
                 className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-slate-200"
               >
                 Cancel
               </button>
               <button
                 onClick={() => {
-                  onLogout(backupOnLogout, backupOnLogout ? vaultPassword : "", clearCacheOnLogout);
+                  onLogout(
+                    backupOnLogout,
+                    backupOnLogout ? vaultPassword : "",
+                    clearCacheOnLogout,
+                  );
                   setShowLogoutModal(false);
                   setVaultPassword("");
                 }}
                 className="px-4 py-2 text-sm font-bold bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors shadow-md flex items-center gap-2"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                  ></path>
                 </svg>
                 Confirm Logout
               </button>
@@ -272,7 +326,9 @@ const Sidebar: React.FC<SidebarProps> = ({
             </h3>
             <button
               onClick={() => {
-                const pwd = window.prompt("Enter a password to encrypt your chat backup:");
+                const pwd = window.prompt(
+                  "Enter a password to encrypt your chat backup:",
+                );
                 if (pwd) onExportChats(pwd);
               }}
               className="w-full px-3 py-2 bg-slate-900 text-indigo-400 text-xs font-bold rounded-lg border border-slate-700 hover:bg-slate-700 hover:text-indigo-300 transition text-left"
@@ -287,7 +343,11 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
             <button
               onClick={() => {
-                if (window.confirm("Are you SURE you want to wipe this device's cache? All messages will be permanently deleted unless you have a backup.")) {
+                if (
+                  window.confirm(
+                    "Are you SURE you want to wipe this device's cache? All messages will be permanently deleted unless you have a backup.",
+                  )
+                ) {
                   onWipeCache();
                 }
               }}
@@ -447,55 +507,61 @@ const Sidebar: React.FC<SidebarProps> = ({
                 {friendsList.map((chatUsername) => {
                   const isOnline = onlineUsers.includes(chatUsername);
                   return (
-                  <div key={chatUsername} className="group flex items-center gap-0">
-                    <button
-                      onClick={() => setActiveChat(chatUsername)}
-                      className={`flex-1 text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 relative ${
-                        activeChat === chatUsername
-                          ? "bg-slate-800 border border-slate-700 shadow-sm"
-                          : "hover:bg-slate-800/50 border border-transparent"
-                      }`}
+                    <div
+                      key={chatUsername}
+                      className="group flex items-center gap-0"
                     >
-                      <div className="relative">
-                        <div className="h-10 w-10 bg-slate-700 text-slate-300 border border-slate-600 rounded-full flex items-center justify-center font-bold text-lg shrink-0 shadow-inner">
-                          {chatUsername.charAt(0).toUpperCase()}
-                        </div>
-                        {isOnline && (
-                          <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-900"></div>
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p
-                          className={`font-medium truncate ${activeChat === chatUsername ? "text-indigo-400" : "text-slate-300"}`}
-                        >
-                          {chatUsername}
-                        </p>
-                        <p className={`text-[10px] font-medium uppercase tracking-wider ${isOnline ? "text-green-500/80" : "text-slate-500"}`}>
-                          {isOnline ? "Encrypted Link Active" : "Offline"}
-                        </p>
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => onBlockUser(chatUsername)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-red-400 transition-all mr-1 shrink-0"
-                      title={`Block ${chatUsername}`}
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                      <button
+                        onClick={() => setActiveChat(chatUsername)}
+                        className={`flex-1 text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 relative ${
+                          activeChat === chatUsername
+                            ? "bg-slate-800 border border-slate-700 shadow-sm"
+                            : "hover:bg-slate-800/50 border border-transparent"
+                        }`}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-                        ></path>
-                      </svg>
-                    </button>
-                  </div>
-                )})}
+                        <div className="relative">
+                          <div className="h-10 w-10 bg-slate-700 text-slate-300 border border-slate-600 rounded-full flex items-center justify-center font-bold text-lg shrink-0 shadow-inner">
+                            {chatUsername.charAt(0).toUpperCase()}
+                          </div>
+                          {isOnline && (
+                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-900"></div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p
+                            className={`font-medium truncate ${activeChat === chatUsername ? "text-indigo-400" : "text-slate-300"}`}
+                          >
+                            {chatUsername}
+                          </p>
+                          <p
+                            className={`text-[10px] font-medium uppercase tracking-wider ${isOnline ? "text-green-500/80" : "text-slate-500"}`}
+                          >
+                            {isOnline ? "Encrypted Link Active" : "Offline"}
+                          </p>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => onBlockUser(chatUsername)}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-red-400 transition-all mr-1 shrink-0"
+                        title={`Block ${chatUsername}`}
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                          ></path>
+                        </svg>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8 text-center">
@@ -513,7 +579,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                   ></path>
                 </svg>
                 <p className="text-sm">
-                  Switch to the Requests tab to find users and establish a connection.
+                  Switch to the Requests tab to find users and establish a
+                  connection.
                 </p>
               </div>
             )}

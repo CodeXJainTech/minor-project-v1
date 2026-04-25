@@ -5,6 +5,7 @@ import { db } from "../services/db";
 import toast from "react-hot-toast";
 import { encryptLocal } from "../crypto/localStore";
 import { ratchetKey } from "../crypto/ratchet";
+import type { RatchetResult } from "./useRatchet";
 
 interface SocketListenersProps {
   user: string;
@@ -14,7 +15,11 @@ interface SocketListenersProps {
   setPendingRequests: React.Dispatch<React.SetStateAction<string[]>>;
   setSentRequests: React.Dispatch<React.SetStateAction<string[]>>;
   setFriendsList: React.Dispatch<React.SetStateAction<string[]>>;
-  getOrCreateSessionKey: (target: string) => Promise<string>;
+  getOrCreateSessionKey: (
+    target: string,
+    eph?: string,
+    sig?: string,
+  ) => Promise<RatchetResult>;
   setOnlineUsers: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
@@ -37,13 +42,13 @@ export function useSocketListeners({
     });
 
     socket.on("user_connected", (connectedUser: string) => {
-      setOnlineUsers((prev) => 
-        prev.includes(connectedUser) ? prev : [...prev, connectedUser]
+      setOnlineUsers((prev) =>
+        prev.includes(connectedUser) ? prev : [...prev, connectedUser],
       );
     });
 
     socket.on("user_disconnected", (disconnectedUser: string) => {
-      setOnlineUsers((prev) => prev.filter(u => u !== disconnectedUser));
+      setOnlineUsers((prev) => prev.filter((u) => u !== disconnectedUser));
     });
 
     socket.on("receive_friend_request", (senderUsername: string) => {
@@ -73,19 +78,29 @@ export function useSocketListeners({
       if (activeChat === blockerUsername) setActiveChat(null);
     });
 
+    socket.on("request_revoked", (senderUsername: string) => {
+      toast.error(`${senderUsername} revoked their friend request.`);
+      setPendingRequests((prev) => prev.filter((u) => u !== senderUsername));
+    });
+
     socket.on("receive_message", async (payload: any) => {
       try {
         if (!myPrivateKey) return;
 
-        // 1. Get current key
-        const currentAesKey = await getOrCreateSessionKey(payload.from);
+        // 1. Get current key (optionally perform handshake if eph/sig are present)
+        const { key: currentAesKey, isHandshakeCollision } =
+          await getOrCreateSessionKey(payload.from, payload.eph, payload.sig);
 
         // 2. Decrypt the message
         const plaintext = await decryptAES(payload.ciphertext, currentAesKey);
 
         // 3. THE RATCHET: Move the lock forward
-        const nextKey = await ratchetKey(currentAesKey);
-        localStorage.setItem(`session_${user}_${payload.from}`, nextKey);
+        // CRITICAL: If this was a handshake collision and we won, DO NOT ratchet.
+        // We want to keep our own session state for future messages.
+        if (!isHandshakeCollision) {
+          const nextKey = await ratchetKey(currentAesKey);
+          localStorage.setItem(`session_${user}_${payload.from}`, nextKey);
+        }
 
         const msgObj = {
           from: payload.from,
@@ -97,10 +112,10 @@ export function useSocketListeners({
         };
 
         await db.messages.add({
-          payload: await encryptLocal(JSON.stringify(msgObj), myPrivateKey)
+          payload: await encryptLocal(JSON.stringify(msgObj), myPrivateKey),
         });
-      } catch (error) {
-        toast.error("Failed to decrypt incoming message.");
+      } catch (error: any) {
+        toast.error("Decryption failed: " + (error.message || "Unknown error"));
       }
     });
 
@@ -110,6 +125,7 @@ export function useSocketListeners({
       socket.off("request_accepted");
       socket.off("request_rejected");
       socket.off("user_blocked_you");
+      socket.off("request_revoked");
       socket.off("online_users");
       socket.off("user_connected");
       socket.off("user_disconnected");

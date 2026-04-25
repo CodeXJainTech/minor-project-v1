@@ -10,7 +10,17 @@ import { useRatchet } from "./hooks/useRatchet";
 import { Toaster } from "react-hot-toast";
 
 export default function App() {
-  const { user, myPrivateKey, handleLogin, handleLogout, handleDownloadVault, handleExportChats, handleImportChats, handleWipeCache, isLoading } = useAuth();
+  const {
+    user,
+    myPrivateKey,
+    handleLogin,
+    handleLogout,
+    handleDownloadVault,
+    handleExportChats,
+    handleImportChats,
+    handleWipeCache,
+    isLoading,
+  } = useAuth();
   const { getOrCreateSessionKey } = useRatchet(user, myPrivateKey);
 
   const {
@@ -63,11 +73,38 @@ export default function App() {
     setOnlineUsers,
   });
 
-  if (!user || !myPrivateKey) return <LoginForm onLogin={handleLogin} isLoading={isLoading} />;
+  if (!user || !myPrivateKey) {
+    return (
+      <div className="bg-slate-950 min-h-screen">
+        <Toaster
+          position="top-right"
+          reverseOrder={false}
+          toastOptions={{
+            style: {
+              background: "#1e293b",
+              color: "#f8fafc",
+              border: "1px solid #334155",
+            },
+          }}
+        />
+        <LoginForm onLogin={handleLogin} isLoading={isLoading} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center py-8 font-sans">
-      <Toaster position="top-right" reverseOrder={false} toastOptions={{ style: { background: '#1e293b', color: '#f8fafc', border: '1px solid #334155' } }} />
+      <Toaster
+        position="top-right"
+        reverseOrder={false}
+        toastOptions={{
+          style: {
+            background: "#1e293b",
+            color: "#f8fafc",
+            border: "1px solid #334155",
+          },
+        }}
+      />
       <div className="w-full max-w-6xl bg-slate-900 shadow-2xl rounded-2xl overflow-hidden flex h-[85vh] border border-slate-800">
         <Sidebar
           user={user}

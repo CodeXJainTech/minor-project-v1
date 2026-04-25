@@ -129,16 +129,25 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                             loading="lazy"
                           />
                         ) : msg.type === "audio" ? (
-                          <audio controls src={msg.decryptedText} className="max-w-full h-10 outline-none" />
+                          <audio
+                            controls
+                            src={msg.decryptedText}
+                            className="max-w-full h-10 outline-none"
+                          />
                         ) : (
                           <p className="text-sm px-1 py-1 break-all whitespace-pre-wrap min-w-0">
                             {msg.decryptedText}
                           </p>
                         )}
                       </div>
-                      <div className={`mt-1 flex items-center gap-2 text-[10px] text-slate-500 max-w-[75%] ${isMe ? "flex-row-reverse" : "flex-row"}`}>
+                      <div
+                        className={`mt-1 flex items-center gap-2 text-[10px] text-slate-500 max-w-[75%] ${isMe ? "flex-row-reverse" : "flex-row"}`}
+                      >
                         <span>
-                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(msg.timestamp).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </span>
                       </div>
                     </div>
@@ -161,7 +170,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               <label
                 htmlFor={isInputDisabled ? undefined : "image-upload"}
                 className={`p-3 bg-slate-800 text-slate-400 rounded-xl transition-colors border border-slate-700 shadow-sm ${isInputDisabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-700 cursor-pointer"}`}
-                title={isInputDisabled ? "Target offline or calculating handshake" : "Send Encrypted Image"}
+                title={
+                  isInputDisabled
+                    ? "Target offline or calculating handshake"
+                    : "Send Encrypted Image"
+                }
               >
                 <svg
                   className="w-6 h-6"
@@ -189,7 +202,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               <label
                 htmlFor={isInputDisabled ? undefined : "audio-upload"}
                 className={`p-3 bg-slate-800 text-slate-400 rounded-xl transition-colors border border-slate-700 shadow-sm ${isInputDisabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-700 cursor-pointer"}`}
-                title={isInputDisabled ? "Target offline or calculating handshake" : "Send Encrypted Audio"}
+                title={
+                  isInputDisabled
+                    ? "Target offline or calculating handshake"
+                    : "Send Encrypted Audio"
+                }
               >
                 <svg
                   className="w-6 h-6"
@@ -197,7 +214,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                   stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                  ></path>
                 </svg>
               </label>
 
@@ -206,18 +228,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                   !isTargetOnline
                     ? "Target is offline. Connection locked."
                     : isSending
-                    ? "Calculating cryptographic handshake..."
-                    : `Secure message to ${activeChat}...`
+                      ? "Calculating cryptographic handshake..."
+                      : `Secure message to ${activeChat}...`
                 }
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !isInputDisabled && onSendMessage()}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && !isInputDisabled && onSendMessage()
+                }
                 disabled={isInputDisabled}
                 className="flex-1 px-4 py-3 bg-slate-950 border border-slate-800 focus:bg-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50 rounded-xl transition-all outline-none text-slate-100 placeholder-slate-500 disabled:opacity-50 shadow-inner"
               />
               <button
                 type="button"
-                onClick={(e) => { e.preventDefault(); onSendMessage(); }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onSendMessage();
+                }}
                 disabled={isInputDisabled || !input.trim()}
                 className="p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
