@@ -148,7 +148,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       <input
         type="file"
-        accept=".cipherbackup"
+        accept=".kryptbackup"
         ref={fileInputRef}
         style={{ display: "none" }}
         onChange={(e) => {
@@ -333,7 +333,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               }}
               className="w-full px-3 py-2 bg-slate-900 text-indigo-400 text-xs font-bold rounded-lg border border-slate-700 hover:bg-slate-700 hover:text-indigo-300 transition text-left"
             >
-              Export Chat Backup (.cipherbackup)
+              Export Chat Backup (.kryptbackup)
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}

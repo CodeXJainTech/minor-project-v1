@@ -38,20 +38,24 @@ export function useSocketListeners({
     if (!user) return;
 
     socket.on("online_users", (users: string[]) => {
+      console.log(`[Socket] Received online_users:`, users);
       setOnlineUsers(users);
     });
 
     socket.on("user_connected", (connectedUser: string) => {
+      console.log(`[Socket] User connected:`, connectedUser);
       setOnlineUsers((prev) =>
         prev.includes(connectedUser) ? prev : [...prev, connectedUser],
       );
     });
 
     socket.on("user_disconnected", (disconnectedUser: string) => {
+      console.log(`[Socket] User disconnected:`, disconnectedUser);
       setOnlineUsers((prev) => prev.filter((u) => u !== disconnectedUser));
     });
 
     socket.on("receive_friend_request", (senderUsername: string) => {
+      console.log(`[Socket] Received friend request from:`, senderUsername);
       toast.success(`New friend request from ${senderUsername}!`);
       setPendingRequests((prev) =>
         prev.includes(senderUsername) ? prev : [...prev, senderUsername],
@@ -59,6 +63,7 @@ export function useSocketListeners({
     });
 
     socket.on("request_accepted", (receiverUsername: string) => {
+      console.log(`[Socket] Request accepted by:`, receiverUsername);
       toast.success(`${receiverUsername} accepted your friend request!`);
       setSentRequests((prev) => prev.filter((u) => u !== receiverUsername));
       setFriendsList((prev) =>
@@ -67,11 +72,13 @@ export function useSocketListeners({
     });
 
     socket.on("request_rejected", (receiverUsername: string) => {
+      console.log(`[Socket] Request rejected by:`, receiverUsername);
       toast.error(`${receiverUsername} declined your friend request.`);
       setSentRequests((prev) => prev.filter((u) => u !== receiverUsername));
     });
 
     socket.on("user_blocked_you", (blockerUsername: string) => {
+      console.log(`[Socket] Blocked by user:`, blockerUsername);
       setFriendsList((prev) => prev.filter((u) => u !== blockerUsername));
       setPendingRequests((prev) => prev.filter((u) => u !== blockerUsername));
       setSentRequests((prev) => prev.filter((u) => u !== blockerUsername));
@@ -79,12 +86,17 @@ export function useSocketListeners({
     });
 
     socket.on("request_revoked", (senderUsername: string) => {
+      console.log(`[Socket] Request revoked by:`, senderUsername);
       toast.error(`${senderUsername} revoked their friend request.`);
       setPendingRequests((prev) => prev.filter((u) => u !== senderUsername));
     });
 
     socket.on("receive_message", async (payload: any) => {
       try {
+        const receivedAt = Date.now();
+        const transferDelay = payload.sentAt ? receivedAt - payload.sentAt : 'unknown';
+        console.log(`[MSG RECEIVE] from=${payload.from} type=${payload.type || "text"} sentAt=${payload.sentAt} receivedAt=${receivedAt} delay=${transferDelay}ms`);
+
         if (!myPrivateKey) return;
 
         // 1. Get current key (optionally perform handshake if eph/sig are present)

@@ -85,6 +85,7 @@ export function useAuth() {
             data.error || "Registration failed. Username might be taken.",
           );
         }
+        console.log(`[Auth] Registration successful for ${username}`);
 
         setMyPrivateKey(keys.privateKey);
         const exportedPrivate = await window.crypto.subtle.exportKey(
@@ -232,6 +233,7 @@ export function useAuth() {
           ["deriveKey", "deriveBits"],
         );
         setMyPrivateKey(loadedKey);
+        console.log(`[Auth] Login successful for ${username}`);
       }
 
       localStorage.setItem("currentUser", username);
@@ -289,7 +291,7 @@ export function useAuth() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `cipher_vault_${user}.vault`;
+      a.download = `krypt_vault_${user}.vault`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -310,7 +312,7 @@ export function useAuth() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `cipher_chats_${user}.cipherbackup`;
+      a.download = `krypt_chats_${user}.kryptbackup`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -376,6 +378,7 @@ export function useAuth() {
     sessionStorage.removeItem("sessionPassword");
     setMyPrivateKey(null);
     setUser("");
+    console.log(`[Auth] User ${user} logged out securely.`);
     window.location.reload();
   };
 

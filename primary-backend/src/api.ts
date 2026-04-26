@@ -17,6 +17,7 @@ router.post("/register", async (req, res) => {
         srpVerifier,
       },
     });
+    console.log(`[API] User registered: ${username}`);
     res
       .status(200)
       .json({ success: true, message: "Zero-Knowledge Identity Created" });
@@ -83,6 +84,7 @@ router.post("/login/verify", async (req, res) => {
     );
 
     activeLoginChallenges.delete(username);
+    console.log(`[API] Login verified for: ${username}`);
 
     res.status(200).json({
       success: true,
@@ -222,6 +224,7 @@ router.post("/request/send", async (req, res) => {
         status: "pending",
       },
     });
+    console.log(`[API] Friend request sent from ${sender} to ${receiver}`);
 
     res.status(200).json({ success: true, message: "Request sent!" });
   } catch (err) {
@@ -340,6 +343,7 @@ router.post("/request/accept", async (req, res) => {
         data: { status: "accepted" },
       });
     }
+    console.log(`[API] Friend request from ${sender} accepted by ${receiver}`);
 
     res
       .status(200)

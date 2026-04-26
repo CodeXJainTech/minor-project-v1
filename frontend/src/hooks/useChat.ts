@@ -85,6 +85,7 @@ export function useChat(
       localStorage.setItem(`session_${user}_${targetUser}`, nextKey);
 
       // 4. Send over socket
+      const sentAt = Date.now();
       const payload = {
         to: targetUser,
         from: user,
@@ -92,8 +93,10 @@ export function useChat(
         type: "text",
         eph, // Include ephemeral key if it's a new session
         sig, // Include signature
+        sentAt,
       };
 
+      console.log(`[MSG SEND] to=${targetUser} type=text sentAt=${sentAt}`);
       socket.emit("private_message", payload);
 
       // 5. Save locally
@@ -174,6 +177,7 @@ export function useChat(
           const nextKey = await ratchetKey(currentAesKey);
           localStorage.setItem(`session_${user}_${targetUser}`, nextKey);
 
+          const sentAt = Date.now();
           const payload = {
             to: targetUser,
             from: user,
@@ -181,7 +185,9 @@ export function useChat(
             type: "image",
             eph,
             sig,
+            sentAt,
           };
+          console.log(`[MSG SEND] to=${targetUser} type=image sentAt=${sentAt}`);
           socket.emit("private_message", payload);
 
           const msgObj = {
@@ -244,6 +250,7 @@ export function useChat(
             const nextKey = await ratchetKey(currentAesKey);
             localStorage.setItem(`session_${user}_${targetUser}`, nextKey);
 
+            const sentAt = Date.now();
             const payload = {
               to: targetUser,
               from: user,
@@ -251,8 +258,10 @@ export function useChat(
               type: "audio",
               eph,
               sig,
+              sentAt,
             };
 
+            console.log(`[MSG SEND] to=${targetUser} type=audio sentAt=${sentAt}`);
             socket.emit("private_message", payload);
             const msgObj = {
               from: user,
