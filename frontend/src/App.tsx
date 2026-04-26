@@ -10,7 +10,17 @@ import { useRatchet } from "./hooks/useRatchet";
 import { Toaster } from "react-hot-toast";
 
 export default function App() {
-  const { user, myPrivateKey, handleLogin, isLoading } = useAuth();
+  const {
+    user,
+    myPrivateKey,
+    handleLogin,
+    handleLogout,
+    handleDownloadVault,
+    handleExportChats,
+    handleImportChats,
+    handleWipeCache,
+    isLoading,
+  } = useAuth();
   const { getOrCreateSessionKey } = useRatchet(user, myPrivateKey);
 
   const {
@@ -23,6 +33,7 @@ export default function App() {
     messages,
     sendMessage,
     sendImage,
+    sendAudio,
     isSending,
   } = useChat(user, myPrivateKey, getOrCreateSessionKey);
 
@@ -45,6 +56,9 @@ export default function App() {
     unblockUser,
     getRelationship,
     searchUsers,
+    onlineUsers,
+    setOnlineUsers,
+    revokeRequest,
   } = useSocial(user, activeChat, setActiveChat);
 
   useSocketListeners({
@@ -56,13 +70,41 @@ export default function App() {
     setSentRequests,
     setFriendsList,
     getOrCreateSessionKey,
+    setOnlineUsers,
   });
 
-  if (!user) return <LoginForm onLogin={handleLogin} isLoading={isLoading} />;
+  if (!user || !myPrivateKey) {
+    return (
+      <div className="bg-slate-950 min-h-screen">
+        <Toaster
+          position="top-right"
+          reverseOrder={false}
+          toastOptions={{
+            style: {
+              background: "#1e293b",
+              color: "#f8fafc",
+              border: "1px solid #334155",
+            },
+          }}
+        />
+        <LoginForm onLogin={handleLogin} isLoading={isLoading} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center py-8 font-sans">
-      <Toaster position="top-right" reverseOrder={false} toastOptions={{ style: { background: '#1e293b', color: '#f8fafc', border: '1px solid #334155' } }} />
+      <Toaster
+        position="top-right"
+        reverseOrder={false}
+        toastOptions={{
+          style: {
+            background: "#1e293b",
+            color: "#f8fafc",
+            border: "1px solid #334155",
+          },
+        }}
+      />
       <div className="w-full max-w-6xl bg-slate-900 shadow-2xl rounded-2xl overflow-hidden flex h-[85vh] border border-slate-800">
         <Sidebar
           user={user}
@@ -78,11 +120,18 @@ export default function App() {
           onSendRequest={sendRequest}
           onAcceptRequest={acceptRequest}
           onRejectRequest={rejectRequest}
+          onRevokeRequest={revokeRequest}
           onBlockUser={blockUser}
           onUnblockUser={unblockUser}
           showBlockPanel={showBlockPanel}
           setShowBlockPanel={setShowBlockPanel}
           getRelationship={getRelationship}
+          onLogout={handleLogout}
+          onDownloadVault={handleDownloadVault}
+          onlineUsers={onlineUsers}
+          onExportChats={handleExportChats}
+          onImportChats={handleImportChats}
+          onWipeCache={handleWipeCache}
         />
         <ChatWindow
           user={user}
@@ -92,8 +141,10 @@ export default function App() {
           setInput={setInput}
           onSendMessage={sendMessage}
           onSendImage={sendImage}
+          onSendAudio={sendAudio}
           setPreviewImage={setPreviewImage}
           isSending={isSending}
+          onlineUsers={onlineUsers}
         />
       </div>
       <ImagePreview

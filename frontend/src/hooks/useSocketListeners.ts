@@ -3,8 +3,9 @@ import { socket } from "../services/socket";
 import { decryptAES } from "../crypto/aes_wasm";
 import { db } from "../services/db";
 import toast from "react-hot-toast";
+import { encryptLocal } from "../crypto/localStore";
 import { ratchetKey } from "../crypto/ratchet";
-import CryptoJS from "crypto-js";
+import type { RatchetResult } from "./useRatchet";
 
 interface SocketListenersProps {
   user: string;
@@ -14,7 +15,12 @@ interface SocketListenersProps {
   setPendingRequests: React.Dispatch<React.SetStateAction<string[]>>;
   setSentRequests: React.Dispatch<React.SetStateAction<string[]>>;
   setFriendsList: React.Dispatch<React.SetStateAction<string[]>>;
-  getOrCreateSessionKey: (target: string) => Promise<string>;
+  getOrCreateSessionKey: (
+    target: string,
+    eph?: string,
+    sig?: string,
+  ) => Promise<RatchetResult>;
+  setOnlineUsers: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
 export function useSocketListeners({
@@ -26,9 +32,24 @@ export function useSocketListeners({
   setSentRequests,
   setFriendsList,
   getOrCreateSessionKey,
+  setOnlineUsers,
 }: SocketListenersProps) {
   useEffect(() => {
     if (!user) return;
+
+    socket.on("online_users", (users: string[]) => {
+      setOnlineUsers(users);
+    });
+
+    socket.on("user_connected", (connectedUser: string) => {
+      setOnlineUsers((prev) =>
+        prev.includes(connectedUser) ? prev : [...prev, connectedUser],
+      );
+    });
+
+    socket.on("user_disconnected", (disconnectedUser: string) => {
+      setOnlineUsers((prev) => prev.filter((u) => u !== disconnectedUser));
+    });
 
     socket.on("receive_friend_request", (senderUsername: string) => {
       toast.success(`New friend request from ${senderUsername}!`);
@@ -57,63 +78,44 @@ export function useSocketListeners({
       if (activeChat === blockerUsername) setActiveChat(null);
     });
 
+    socket.on("request_revoked", (senderUsername: string) => {
+      toast.error(`${senderUsername} revoked their friend request.`);
+      setPendingRequests((prev) => prev.filter((u) => u !== senderUsername));
+    });
+
     socket.on("receive_message", async (payload: any) => {
       try {
         if (!myPrivateKey) return;
 
-        // 1. Get current key
-        const currentAesKey = await getOrCreateSessionKey(payload.from);
-
-        let actualCiphertext = payload.ciphertext;
-        if (payload.type === "image") {
-          try {
-            const res = await fetch(payload.ciphertext);
-            if (!res.ok) {
-              throw new Error(`Failed to fetch image: ${res.status} ${res.statusText} at ${payload.ciphertext}`);
-            }
-            actualCiphertext = await res.text();
-            
-            // Basic validation: ciphertext should be base64
-            if (!actualCiphertext || actualCiphertext.length < 10) {
-               throw new Error("Fetched image ciphertext is too short or empty.");
-            }
-          } catch (fetchError) {
-            console.error("Image fetch error:", fetchError);
-            throw fetchError; // Re-throw to be caught by the outer catch
-          }
-        }
-
-        // Verify HMAC for Integrity
-        if (payload.hmac) {
-          const expectedHmac = CryptoJS.HmacSHA256(actualCiphertext, currentAesKey).toString();
-          if (expectedHmac !== payload.hmac) {
-            toast.error("Integrity Check Failed: Tampered Message Detected!");
-            throw new Error("HMAC verification failed. The ciphertext was altered in transit.");
-          }
-        } else {
-          console.warn("Message received without HMAC, bypassing integrity check (legacy message)");
-        }
+        // 1. Get current key (optionally perform handshake if eph/sig are present)
+        const { key: currentAesKey, isHandshakeCollision } =
+          await getOrCreateSessionKey(payload.from, payload.eph, payload.sig);
 
         // 2. Decrypt the message
-        const plaintext = await decryptAES(actualCiphertext, currentAesKey);
+        const plaintext = await decryptAES(payload.ciphertext, currentAesKey);
 
         // 3. THE RATCHET: Move the lock forward
-        const nextKey = await ratchetKey(currentAesKey);
-        localStorage.setItem(`session_${user}_${payload.from}`, nextKey);
+        // CRITICAL: If this was a handshake collision and we won, DO NOT ratchet.
+        // We want to keep our own session state for future messages.
+        if (!isHandshakeCollision) {
+          const nextKey = await ratchetKey(currentAesKey);
+          localStorage.setItem(`session_${user}_${payload.from}`, nextKey);
+        }
 
-        await db.messages.add({
+        const msgObj = {
           from: payload.from,
           to: user,
           decryptedText: plaintext,
           ciphertext: payload.ciphertext,
           type: payload.type || "text",
           timestamp: Date.now(),
+        };
+
+        await db.messages.add({
+          payload: await encryptLocal(JSON.stringify(msgObj), myPrivateKey),
         });
-      } catch (error) {
-        console.error(
-          "Failed to decrypt incoming message (Ratchet sync?):",
-          error,
-        );
+      } catch (error: any) {
+        toast.error("Decryption failed: " + (error.message || "Unknown error"));
       }
     });
 
@@ -123,6 +125,10 @@ export function useSocketListeners({
       socket.off("request_accepted");
       socket.off("request_rejected");
       socket.off("user_blocked_you");
+      socket.off("request_revoked");
+      socket.off("online_users");
+      socket.off("user_connected");
+      socket.off("user_disconnected");
     };
   }, [
     user,

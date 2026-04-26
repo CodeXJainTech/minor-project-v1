@@ -1,12 +1,10 @@
-# 🛡️ Project Cipher: Mathematically Verified E2EE Chat
+# 🛡️ Project Krypt: Mathematically Verified E2EE Chat
 
-**Project Cipher** is a military-grade, End-to-End Encrypted (E2EE) real-time messaging application. It is designed with a strictly "Zero-Trust" architecture: the server never knows your password, never sees your encryption keys, and immediately deletes messages upon delivery. 
+**Project Krypt** is a military-grade, End-to-End Encrypted (E2EE) real-time messaging application. It is designed with a strictly "Zero-Trust" and "Zero-Footprint" architecture: the server never knows your password, never sees your encryption keys, and immediately drops messages upon delivery. 
 
-It features Zero-Knowledge Proof authentication, Elliptic Curve Key Exchange (ECDH), Perfect Forward Secrecy (via a SHA-256 Ratchet), and High-Performance Symmetric Encryption using a custom C++ WebAssembly engine.
+It features **Zero-Knowledge Proof authentication (SRP-6a)**, **Physical Vault Identities**, **Elliptic Curve Key Exchange (ECDH)**, **Perfect Forward Secrecy (via a SHA-256 Ratchet)**, and **High-Performance Symmetric Encryption** using a custom C++ WebAssembly engine.
 
----
-
-## 🗺️ System Architecture
+-## 🗺️ System Architecture
 
 ### 1. High-Level Infrastructure
 The following diagram outlines the complete flow of data between the Vercel-hosted React clients, the Render-hosted Express WebSocket router, and the Neon Serverless PostgreSQL database.
@@ -17,19 +15,17 @@ flowchart TB
         UI_A[React UI]
         WASM_A[WASM AES Engine]
         ECC_A[Web Crypto API]
-        DB_A[(IndexedDB / Dexie)]
+        DB_A[(IndexedDB / Secure Cache)]
     end
 
     subgraph Backend [Blind Router - Render.com]
         API[Express REST API]
-        WS[Socket.io Router]
-        MULTER[Multer Memory/Disk]
+        WS[Socket.io RAM Router]
     end
 
     subgraph Database [Database - Neon.tech]
         PG[(PostgreSQL)]
-        QUEUE[QueuedMessages Table]
-        USERS[Users & Invites Table]
+        USERS[Users & Friend Requests]
     end
 
     subgraph Client_Bob [Bob's Client - Vercel]
@@ -37,19 +33,17 @@ flowchart TB
     end
 
     %% Frontend Internal Logic
-    UI_A <-->|1. Generate Keys| ECC_A
+    UI_A <-->|1. Import Vault / Gen Keys| ECC_A
     UI_A <-->|2. Encrypt/Decrypt| WASM_A
     UI_A <-->|3. Persist Cleartext| DB_A
 
     %% Network Logic
     UI_A <-->|SRP Auth & Invites| API
-    UI_A <-->|Encrypted Ciphertext| WS
-    UI_B <-->|Encrypted Ciphertext| WS
+    UI_A <-->|Encrypted Ciphertext & Media Base64| WS
+    UI_B <-->|Encrypted Ciphertext & Media Base64| WS
     
     %% Backend Logic
     API <-->|Validate & Query| USERS
-    WS <-->|Offline? Save to Queue| QUEUE
-    WS <-->|Rich Media| MULTER
 
     classDef client fill:#e6f2ff,stroke:#0066cc,stroke-width:2px;
     classDef backend fill:#f9f2ec,stroke:#cc6600,stroke-width:2px;
@@ -61,7 +55,7 @@ flowchart TB
 ```
 
 ### 2. The ECDH & Ratchet Flow (Perfect Forward Secrecy)
-This sequence diagram illustrates how Alice and Bob derive a shared AES key using Elliptic Curve Cryptography without ever transmitting the key, and how the SHA-256 Ratchet destroys keys after every message to ensure forward secrecy.
+This sequence diagram illustrates how Alice and Bob derive a shared AES key using Elliptic Curve Cryptography, and how the SHA-256 Ratchet destroys keys after every message to ensure forward secrecy.
 
 ```mermaid
 sequenceDiagram
@@ -80,11 +74,11 @@ sequenceDiagram
     note over Bob: Bob computes: <br/> (Bob_Private * Alice_Public) <br/> = Root AES Key
 
     note over Alice, Bob: Phase 2: Message Transmission & The Ratchet
-    note over Alice: Encrypts Msg #1 with Root Key
+    note over Alice: Encrypts Msg #1 with Root Key (WASM AES-GCM)
     Alice->>Express: Sends Ciphertext
     note over Alice: Ratchets Root Key to Key 2 (SHA-256)<br/>Deletes Root Key!
     
-    Express->>Bob: Routes Ciphertext (Server cannot read it)
+    Express->>Bob: Routes Ciphertext (Instantly dropped if offline)
     
     note over Bob: Decrypts Msg #1 with Root Key
     note over Bob: Ratchets Root Key to Key 2 (SHA-256)<br/>Deletes Root Key!
@@ -103,16 +97,16 @@ sequenceDiagram
 - **Framework:** React + Vite + TypeScript
 - **State & Logic:** Custom React Hooks
 - **Cryptography:** Native Web Crypto API (`window.crypto.subtle`), custom C++ WASM (for heavy AES-256 media encryption), `secure-remote-password` (SRP).
+- **Session Management:** Physical `.vault` files, `sessionStorage` (Volatile Tab Cache), and `localStorage` (Encrypted Key Cache).
 - **Local Database:** `dexie` (IndexedDB) for persistent, client-side message storage.
 - **Styling:** Tailwind CSS.
 - **Hosting:** Vercel
 
 ### Backend (The Blind Router)
 - **Framework:** Node.js + Express + TypeScript
-- **Real-time:** Socket.io
+- **Real-time & Media Routing:** Socket.io (Pure Memory Routing for text and large Base64 media).
 - **Database ORM:** Prisma
 - **Database:** PostgreSQL (Hosted on Neon.tech via Connection Pooling)
-- **File Storage:** `multer` (Temporarily stores encrypted Base64 blobs before 7-day cron wipe)
 - **Security:** `helmet`, strict CORS.
 - **Hosting:** Render.com
 
@@ -125,13 +119,13 @@ The application is organized into a frontend React application and a backend Nod
 ```plaintext
 src/
 ├── components/         # UI Elements
-│   ├── LoginForm.tsx   # Handles SRP ZK-Proof Auth UI
+│   ├── LoginForm.tsx   # Handles SRP ZK-Proof Auth UI & Vault Uploads
 │   ├── Sidebar.tsx     # Social Wall, Friend Requests, Search
 │   ├── ChatWindow.tsx  # Main message rendering
 │   └── ImagePreview.tsx# Image lightbox and zoom preview
 ├── hooks/              # Custom React Logic
-│   ├── useAuth.ts      # SRP Handshake & Session Management
-│   ├── useSocketListeners.ts # WebSocket listeners & offline queue sync
+│   ├── useAuth.ts      # SRP Handshake & Vault Restoration Logic
+│   ├── useSocketListeners.ts # WebSocket listeners
 │   ├── useChat.ts      # Message handling & E2EE flow
 │   ├── useSocial.ts    # Friend management & social state
 │   └── useRatchet.ts   # SHA-256 Ratchet management
@@ -149,54 +143,78 @@ src/
 ### Backend (`primary-backend/src/`)
 ```plaintext
 src/
-├── api.ts              # Express REST endpoints (Auth, Search, Friends)
+├── api.ts              # Express REST endpoints (Auth, Search, Friends, Revoke)
 ├── server.ts           # Socket.io router and HTTP server setup
 └── db.ts               # Prisma client initialization
 ```
 
-
 ---
 
 ## 🧮 Cryptographic Evolution & Theorems
-This application was built in iterative phases, transitioning from legacy Asymmetric standards to modern Elliptic Curve protocols to achieve Perfect Forward Secrecy.
+This application was built in iterative phases, transitioning from legacy standards to modern, mathematically verified security lifecycles.
 
-### 1. Zero-Knowledge Proofs (Secure Remote Password - SRP)
-- **The Problem:** Sending a password to a server (even hashed) leaves it vulnerable to database leaks or man-in-the-middle attacks.
+### 1. Zero-Knowledge Proofs (Secure Remote Password - SRP-6a)
+- **The Problem:** Sending a password to a server leaves it vulnerable to database leaks or MITM attacks.
 - **The Theorem:** Instead of sending a password, Alice uses her password to solve a massive mathematical puzzle generated by the server.
-- **Implementation:** We use the **SRP-6a** protocol. The server stores a Salt and a mathematical Verifier. When Alice logs in, she mixes an Ephemeral Key with the server's Challenge. If the math checks out, the server authenticates her without ever receiving the actual password string.
+- **Implementation:** The server stores a Salt and a mathematical Verifier. When Alice logs in, she mixes an Ephemeral Key with the server's Challenge. If the math checks out, she is authenticated without the actual password string ever leaving her RAM.
 
-### 2. The Architecture Shift: Why We Replaced RSA with ECC
-In the initial phases of this project, we used RSA-2048 for key exchange. Alice would generate an AES key, lock it inside an RSA "box" using Bob's Public Key, and send that locked box over the WebSocket. We explicitly ripped RSA out and upgraded to **Elliptic Curve Cryptography (NIST P-256)** for three critical reasons:
-1. **Performance & Size:** RSA keys are massive (2048 bits) and mathematically heavy. ECC provides the exact same security level at a fraction of the size (256 bits), saving bandwidth and device battery life.
-2. **Key Agreement vs. Key Transport:** RSA requires Key Transport (sending a locked AES key over the internet). ECC allows for Key Agreement (Diffie-Hellman), meaning the key is never transmitted.
-3. **Ratchet Compatibility:** RSA is too slow to generate new key pairs for every single message. ECC's speed allows us to dynamically rotate keys, making the Ratchet possible.
+### 2. Identity Genesis & The Physical Vault
+- **The Protocol:** During registration, the client generates a permanent ECC P-256 KeyPair. The public key serves as the global "Identity Certificate."
+- **Physical Custody:** The Private Key is exported as a physical `.vault` file to the user's hard drive. The server never sees the Private Key.
 
-### 3. Elliptic Curve Diffie-Hellman (ECDH Key Mixing)
-- **The Theorem (Commutative Mathematics):** In Elliptic Curve math, a Public Key is just a Private Key multiplied by a public Base Point ($G$).
-- **Implementation:** Instead of sending keys over the wire, Alice takes her Private Key and mathematically multiplies it by Bob's Public Key: `(Private_A * Public_B)`. Bob does the exact same with Alice's Public Key: `(Private_B * Public_A)`. Because multiplication is commutative, they both arrive at the exact same Root AES Key independently.
+### 3. Secure Auto-Restoration (Tab Refreshing)
+- **The Problem:** If a user refreshes the page, RAM is cleared. Forcing them to re-upload their `.vault` file on every refresh is poor UX.
+- **Implementation:** During login, the session password is saved to volatile `sessionStorage` (dies when the tab closes). The `.vault` Private Key is encrypted with this password and cached in `localStorage`. On refresh, the app uses the `sessionStorage` password to silently decrypt the `localStorage` cache back into RAM.
 
-### 4. Perfect Forward Secrecy (The SHA-256 Ratchet)
-- **The Problem:** If Alice and Bob use the same AES key forever, a hacker who steals Bob's phone a year from now can decrypt every past message.
-- **The Theorem (Deterministic One-Way Hashing):** A cryptographic hash function (SHA-256) takes an input and produces a predictable output, but it cannot be reversed.
-- **Implementation:** After a message is sent, Alice and Bob instantly run their Root AES Key through the `ratchetKey()` SHA-256 blender to create the next key. They permanently delete the old key. If a hacker steals a device, they only get the current key and cannot "un-hash" it to read historical messages.
+### 4. Elliptic Curve Diffie-Hellman (ECDH Key Mixing)
+- **The Theorem:** In Elliptic Curve math, a Public Key is just a Private Key multiplied by a public Base Point ($G$).
+- **Implementation:** Alice takes her Private Key and mathematically multiplies it by Bob's Public Key: `(Private_A * Public_B)`. Bob does the exact same with Alice's Public Key: `(Private_B * Public_A)`. Because multiplication is commutative, they both independently arrive at the exact same Root AES Key.
 
-### 5. Symmetric Authenticated Encryption (AES-256-GCM via WASM)
-- **The Problem:** Asymmetric math (ECC/RSA) is designed for tiny text payloads. It cannot encrypt large files like 4MB images without crashing the browser.
-- **Implementation:** We use a custom **C++ WebAssembly engine** to perform AES-256-GCM symmetric encryption. It is lightning fast, allowing us to encrypt large Base64 image strings locally in milliseconds before uploading the encrypted blob to the server.
+### 5. Perfect Forward Secrecy (The SHA-256 Ratchet)
+- **The Problem:** Using the same AES key forever means a future device theft compromises the entire past chat history.
+- **Implementation:** Immediately after sending/receiving a message, the app runs the Root AES Key through a SHA-256 one-way hash function to create the next key, permanently deleting the old key.
+
+### 6. Handshake Collision Resolution (Deterministic Tie-Breaking)
+- **The Problem:** In a truly decentralized E2EE system, if two users send their first message at the exact same millisecond, they both try to be the "Initiator" with different ephemeral keys. This leads to a state mismatch.
+- **The Theorem:** Use a deterministic tie-breaker that requires zero network communication. 
+- **Implementation:** Both clients compare usernames alphabetically. The lexicographically smaller username (e.g., "Alice" < "Bob") is designated the "Winner." The winner's ephemeral key becomes the root of the session. The loser detects the collision, discards their own initiation attempt, and adopts the winner's key.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Alice
+    actor Bob
+    Note over Alice, Bob: Simultaneous Initiation (Alice < Bob)
+    
+    Alice->>Bob: [Msg 1] + Handshake(Eph_A)
+    Bob->>Alice: [Msg 1] + Handshake(Eph_B)
+    
+    Note over Alice: Receives Bob's Msg<br/>Detects Collision (Alice < Bob)<br/>Winner: Alice
+    Note over Alice: Decrypts Msg 1 using Eph_B<br/>Preserves own session (Key_A)
+    
+    Note over Bob: Receives Alice's Msg<br/>Detects Collision (Alice < Bob)<br/>Winner: Alice
+    Note over Bob: Discards own session (Key_B)<br/>Adopts Alice's session (Key_A)
+    
+    Note over Alice, Bob: Both clients are now synchronized on Key_A
+```
+
+### 7. Pure Memory Routing & WASM Encryption
+- **The Problem:** Asymmetric math (ECC) is designed for tiny payloads. It cannot encrypt large files without crashing the browser, and saving temporary files to a server disk leaves a forensic trail.
+- **Implementation:** A custom C++ WebAssembly engine handles heavy AES-256-GCM symmetric encryption on the client. The resulting encrypted blobs (Image/Audio) are transmitted as massive Base64 strings directly over the WebSocket. The backend server acts as a "Blind Router," holding the payload strictly in RAM for routing and immediately clearing it from memory. Zero disk footprint.
 
 ---
 
 ## 🚀 Development Roadmap & Architectural Phases
-This project was intentionally built in distinct phases to validate each layer of the security architecture before moving to the next.
+This project was intentionally built in distinct phases to validate each layer of the security architecture.
 
 - **Phase 1: Zero-Knowledge Identity:** Implemented SRP-6a. The database was secured to only store `srpSalt` and `srpVerifier`.
-- **Phase 2: The Blind Router:** Built the Express WebSocket router to handle real-time delivery without terminating TLS or reading payloads.
-- **Phase 3: Asymmetric Prototype (RSA):** Successfully implemented standard RSA-2048 E2EE. Validated that clients could encrypt AES keys and send them via the Socket.
-- **Phase 4: Offline State Management:** Engineered the Prisma/PostgreSQL queue to cache encrypted blobs for offline users, dumping and deleting them upon reconnect.
-- **Phase 5: Client-Side Persistence:** Migrated decrypted message storage from server RAM to the client's local IndexedDB using `dexie`.
-- **Phase 6: Rich Media & WebAssembly:** Integrated C++ WASM engines to handle heavy AES image encryption and a `multer` pipeline for encrypted blob storage.
-- **Phase 7: The Social Wall:** Built a robust Friend Request database schema to prevent cryptographic payload spam from unauthorized connections.
-- **Phase 8: The Cryptographic Upgrade (ECC & Ratchet):** Stripped out the legacy RSA architecture from Phase 3. Upgraded the entire platform to Elliptic Curve Diffie-Hellman (ECDH) and implemented the SHA-256 double-ratchet for Perfect Forward Secrecy.
+- **Phase 2: The Blind Router:** Built the Express WebSocket router to handle real-time delivery without reading payloads.
+- **Phase 3: Asymmetric Prototype (RSA):** Successfully implemented standard RSA-2048 E2EE. (Later deprecated for ECC).
+- **Phase 4: Client-Side Persistence:** Migrated decrypted message storage exclusively to the client's local IndexedDB using `dexie`.
+- **Phase 5: Rich Media via Pure RAM Routing:** Integrated C++ WASM engines to handle heavy AES image/audio encryption, transmitting payloads directly over WebSockets to avoid backend disk writes.
+- **Phase 6: The Social Wall:** Built a robust Friend Request database schema (with instant Socket revocation via `request_revoked`) to prevent unauthorized payload spam.
+- **Phase 7: The Cryptographic Upgrade:** Stripped out legacy RSA. Upgraded the platform to Elliptic Curve Diffie-Hellman (ECDH) and the SHA-256 Double-Ratchet.
+- **Phase 8: Nuclear Logout & Identity Vaults:** Transitioned to strict zero-footprint. Added `.vault` file exports, `sessionStorage` auto-restoration, and the "Nuclear Logout" mechanism to completely wipe IndexedDB and Local/Session storage.
 - **Phase 9: Cloud Deployment:** Hardened Express with `helmet` and strict CORS. Deployed the PostgreSQL database to Neon, the API to Render, and the React client to Vercel.
 
 ---

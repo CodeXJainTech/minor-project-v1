@@ -1,41 +1,8 @@
 import { Router } from "express";
-import { authenticate, userExists } from "./users.js";
-import { getMessagesForUser } from "./messages.js";
 import { prisma } from "./db.js";
 import srp from "secure-remote-password/server.js";
-import path from "path";
-import multer from "multer";
-import fs from "fs";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const router = Router();
 const activeLoginChallenges = new Map<string, { ephemeralSecret: string }>();
-
-// Ensure uploads directory exists
-const uploadDir = path.join(__dirname, "../uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Configure multer with 10MB limit
-const upload = multer({
-  dest: uploadDir,
-  limits: {
-    fileSize: 10 * 1024 * 1024,
-  },
-});
-
-// Upload encrypted file
-router.post("/upload", upload.single("encryptedFile"), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded." });
-  }
-
-  const fileUrl = `${process.env.API_URL}/uploads/${req.file.filename}`;
-  res.status(200).json({ url: fileUrl });
-});
 
 // Register a new user
 router.post("/register", async (req, res) => {
@@ -53,8 +20,14 @@ router.post("/register", async (req, res) => {
     res
       .status(200)
       .json({ success: true, message: "Zero-Knowledge Identity Created" });
-  } catch (error) {
-    console.error("[DB] Registration Error:", error);
+  } catch (error: any) {
+    if (error?.code === "P2002") {
+      console.error(
+        `[DB] Registration Error: Username '${username}' is already taken.`,
+      );
+    } else {
+      console.error("[DB] Registration Error:", error?.message || error);
+    }
     res.status(400).json({ error: "Username already exists or invalid data." });
   }
 });
@@ -122,14 +95,7 @@ router.post("/login/verify", async (req, res) => {
   }
 });
 
-// Get offline messages for a user
-router.get("/messages/:user", (req, res) => {
-  const user = req.params.user;
-  if (!userExists(user)) {
-    return res.status(400).json({ error: "User not found" });
-  }
-  res.json(getMessagesForUser(user));
-});
+// (Offline messages logic removed for zero-footprint architecture)
 
 // Search users (excludes self and blocked users)
 router.get("/users/search", async (req, res) => {
@@ -302,12 +268,30 @@ router.get("/request/sent/:username", async (req, res) => {
     res.status(200).json({ requests: sent.map((r) => r.receiverUsername) });
   } catch (err) {
     console.error("[API] Get sent requests error:", err);
-    res
-      .status(500)
-      .json({
-        error: "Database error.",
-        details: err instanceof Error ? err.message : String(err),
-      });
+    res.status(500).json({
+      error: "Database error.",
+      details: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+// Revoke an outgoing friend request
+router.post("/request/revoke", async (req, res) => {
+  const { sender, receiver } = req.body;
+
+  try {
+    await prisma.friendRequest.deleteMany({
+      where: {
+        senderUsername: sender,
+        receiverUsername: receiver,
+        status: "pending",
+      },
+    });
+
+    res.status(200).json({ success: true, message: "Request revoked." });
+  } catch (err) {
+    console.error("[API] Revoke request error:", err);
+    res.status(500).json({ error: "Database error." });
   }
 });
 
@@ -316,8 +300,24 @@ router.post("/request/accept", async (req, res) => {
   const { sender, receiver } = req.body;
 
   try {
-    await prisma.friendRequest.updateMany({
-      where: { senderUsername: sender, receiverUsername: receiver },
+    const request = await prisma.friendRequest.findFirst({
+      where: {
+        senderUsername: sender,
+        receiverUsername: receiver,
+        status: "pending",
+      },
+    });
+
+    if (!request) {
+      return res
+        .status(400)
+        .json({
+          error: "Friend request no longer exists or has been revoked.",
+        });
+    }
+
+    await prisma.friendRequest.update({
+      where: { id: request.id },
       data: { status: "accepted" },
     });
 
@@ -445,12 +445,10 @@ router.get("/friends/:username", async (req, res) => {
     res.status(200).json({ friends: friendNames });
   } catch (err) {
     console.error("[API] Get friends error:", err);
-    res
-      .status(500)
-      .json({
-        error: "Failed to fetch friends.",
-        details: err instanceof Error ? err.message : String(err),
-      });
+    res.status(500).json({
+      error: "Failed to fetch friends.",
+      details: err instanceof Error ? err.message : String(err),
+    });
   }
 });
 
@@ -524,12 +522,10 @@ router.get("/blocked/:username", async (req, res) => {
     res.status(200).json({ blocked: blocked.map((b) => b.blockedUsername) });
   } catch (err) {
     console.error("[API] Get blocked users error:", err);
-    res
-      .status(500)
-      .json({
-        error: "Database error.",
-        details: err instanceof Error ? err.message : String(err),
-      });
+    res.status(500).json({
+      error: "Database error.",
+      details: err instanceof Error ? err.message : String(err),
+    });
   }
 });
 
